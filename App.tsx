@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Platform, StatusBar as RNStatusBar, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -19,12 +20,17 @@ function MainApp() {
   const [tab, setTab] = useState<Tab>("feed");
 
   if (!currentUser) {
-    return <AuthScreen />;
+    return (
+      <SafeAreaView style={styles.root} edges={["top", "bottom"]}>
+        <StatusBar style="light" backgroundColor={COLORS.bg} translucent={false} />
+        <AuthScreen />
+      </SafeAreaView>
+    );
   }
 
   return (
-    <SafeAreaView style={styles.root}>
-      <StatusBar style="light" />
+    <SafeAreaView style={styles.root} edges={["top", "bottom"]}>
+      <StatusBar style="light" backgroundColor={COLORS.bg} translucent={false} />
       <View style={styles.body}>
         {tab === "feed" && <FeedScreen />}
         {tab === "explore" && <ExploreScreen />}
@@ -72,14 +78,16 @@ function MainApp() {
 
 export default function App() {
   return (
-    <AppProvider>
-      <MainApp />
-    </AppProvider>
+    <SafeAreaProvider>
+      <AppProvider>
+        <MainApp />
+      </AppProvider>
+    </SafeAreaProvider>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.bg },
+  root: { flex: 1, backgroundColor: COLORS.bg, paddingTop: Platform.OS === "android" ? (RNStatusBar.currentHeight ?? 0) * 0.25 : 0 },
   body: { flex: 1 },
   tabBarWrap: {
     backgroundColor: COLORS.bg,
