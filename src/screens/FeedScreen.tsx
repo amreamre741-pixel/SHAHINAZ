@@ -1,13 +1,35 @@
 import React, { useState } from "react";
-import { Alert, FlatList, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Alert, FlatList, Image, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import * as ImagePicker from "expo-image-picker";
 import { COLORS } from "../theme";
 import { useApp } from "../store/AppContext";
-import type { Post } from "../types";
+import type { Post, Story } from "../types";
 
 export default function FeedScreen() {
-  const { posts, stories, announcement, toggleLike, toggleSave, addComment, reportPost, blockUser } = useApp();
+  const {
+    posts,
+    stories,
+    notifications,
+    announcement,
+    toggleLike,
+    toggleSave,
+    addComment,
+    addStory,
+    markStorySeen,
+    markAllNotificationsRead,
+    reportPost,
+    blockUser,
+  } = useApp();
+
   const [commentingPostId, setCommentingPostId] = useState<string | null>(null);
   const [commentText, setCommentText] = useState("");
+  const [activeStory, setActiveStory] = useState<Story | null>(null);
+  const [newStoryOpen, setNewStoryOpen] = useState(false);
+  const [storyText, setStoryText] = useState("");
+  const [storyImg, setStoryImg] = useState<string | undefined>(undefined);
+  const [notifOpen, setNotifOpen] = useState(false);
+
+  const unreadNotifs = notifications.filter((n) => !n.read).length;
 
   function openPostMenu(post: Post) {
     Alert.alert("خيارات المنشور", "اختر إجراءً لحماية تجربتك:", [
@@ -31,108 +53,224 @@ export default function FeedScreen() {
     ]);
   }
 
+  async function pickStoryImage() {
+    const res = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.8,
+    });
+    if (!res.canceled && res.assets[0]?.uri) setStoryImg(res.assets[0].uri);
+  }
+
   return (
-    <FlatList
-      style={styles.list}
-      data={posts}
-      keyExtractor={(item) => item.id}
-      ListHeaderComponent={
-        <View>
-          <View style={styles.header}>
-            <Text style={styles.brand}>SHAHINAZ</Text>
-            <Text style={styles.badge}>✨ جديد</Text>
-          </View>
-          {!!announcement && (
-            <View style={{ backgroundColor: "rgba(139,92,246,0.18)", borderColor: COLORS.primary, borderWidth: 1, marginHorizontal: 12, marginBottom: 8, padding: 10, borderRadius: 12 }}>
-              <Text style={{ color: COLORS.text, fontSize: 13, fontWeight: "700", textAlign: "right" }}>📢 {announcement}</Text>
+    <View style={{ flex: 1, backgroundColor: COLORS.bg }}>
+      <FlatList
+        style={styles.list}
+        data={posts}
+        keyExtractor={(item) => item.id}
+        ListHeaderComponent={
+          <View>
+            <View style={styles.header}>
+              <Text style={styles.brand}>SHAHINAZ</Text>
+              <TouchableOpacity
+                style={styles.bellBtn}
+                onPress={() => {
+                  setNotifOpen(true);
+                  markAllNotificationsRead();
+                }}
+              >
+                <Text style={{ fontSize: 18 }}>🔔</Text>
+                {unreadNotifs > 0 && (
+                  <View style={styles.bellBadge}>
+                    <Text style={{ color: "#fff", fontSize: 10, fontWeight: "700" }}>{unreadNotifs}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
             </View>
-          )}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.storiesRow}>
-            {stories.map((st) => (
-              <View key={st.id} style={styles.storyItem}>
-                <View style={[styles.storyRing, !st.seen && styles.storyRingActive]}>
-                  <Text style={styles.storyEmoji}>{st.avatarEmoji}</Text>
+
+            {!!announcement && (
+              <View style={styles.announceBox}>
+                <Text style={styles.announceText}>📢 {announcement}</Text>
+              </View>
+            )}
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.storiesRow}>
+              <TouchableOpacity style={styles.storyItem} onPress={() => setNewStoryOpen(true)}>
+                <View style={[styles.storyRing, { borderColor: COLORS.primary }]}>
+                  <Text style={styles.storyEmoji}>➕</Text>
                 </View>
-                <Text style={styles.storyName} numberOfLines={1}>
-                  {st.userName}
-                </Text>
-              </View>
-            ))}
-          </ScrollView>
-        </View>
-      }
-      renderItem={({ item }) => (
-        <View style={styles.card}>
-          <View style={styles.cardHead}>
-            <View style={styles.authorRow}>
-              <View style={styles.avatar}>
-                <Text style={{ fontSize: 20 }}>{item.author.avatarEmoji}</Text>
-              </View>
-              <View style={{ alignItems: "flex-end" }}>
-                <Text style={styles.authorName}>
-                  {item.author.name} {item.author.verified ? "☑️" : ""}
-                </Text>
-                <Text style={styles.meta}>
-                  {item.createdAt} {item.location ? `· ${item.location}` : ""}
-                </Text>
-              </View>
-            </View>
-            <TouchableOpacity onPress={() => openPostMenu(item)} style={styles.moreBtn}>
-              <Text style={styles.moreText}>⋯</Text>
-            </TouchableOpacity>
-          </View>
+                <Text style={styles.storyName}>قصتك</Text>
+              </TouchableOpacity>
 
-          {!!item.content && <Text style={styles.content}>{item.content}</Text>}
-          {!!item.imageUri && <Image source={{ uri: item.imageUri }} style={styles.postImage} />}
-
-          <View style={styles.actionsRow}>
-            <TouchableOpacity style={styles.actionBtn} onPress={() => toggleLike(item.id)}>
-              <Text style={styles.actionText}>
-                {item.likedByMe ? "❤️" : "🤍"} {item.likes}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.actionBtn}
-              onPress={() => setCommentingPostId(commentingPostId === item.id ? null : item.id)}
-            >
-              <Text style={styles.actionText}>💬 {item.comments.length}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionBtn} onPress={() => toggleSave(item.id)}>
-              <Text style={styles.actionText}>{item.savedByMe ? "🔖 محفوظ" : "📑 حفظ"}</Text>
-            </TouchableOpacity>
-          </View>
-
-          {commentingPostId === item.id && (
-            <View style={styles.commentsBox}>
-              {item.comments.map((c) => (
-                <View key={c.id} style={styles.commentItem}>
-                  <Text style={styles.commentAuthor}>{c.userName}</Text>
-                  <Text style={styles.commentText}>{c.text}</Text>
-                </View>
-              ))}
-              <View style={styles.commentInputRow}>
-                <TextInput
-                  style={styles.commentInput}
-                  placeholder="اكتب تعليقاً..."
-                  placeholderTextColor={COLORS.muted}
-                  value={commentText}
-                  onChangeText={setCommentText}
-                />
+              {stories.map((st) => (
                 <TouchableOpacity
-                  style={styles.sendCommentBtn}
+                  key={st.id}
+                  style={styles.storyItem}
                   onPress={() => {
-                    addComment(item.id, commentText);
-                    setCommentText("");
+                    markStorySeen(st.id);
+                    setActiveStory(st);
                   }}
                 >
-                  <Text style={{ color: "#fff", fontWeight: "700", fontSize: 12 }}>إرسال</Text>
+                  <View style={[styles.storyRing, !st.seen && styles.storyRingActive]}>
+                    <Text style={styles.storyEmoji}>{st.avatarEmoji}</Text>
+                  </View>
+                  <Text style={styles.storyName} numberOfLines={1}>
+                    {st.userName}
+                  </Text>
                 </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        }
+        renderItem={({ item }) => (
+          <View style={styles.card}>
+            <View style={styles.cardHead}>
+              <View style={styles.authorRow}>
+                <View style={styles.avatar}>
+                  {item.author.avatarUri ? (
+                    <Image source={{ uri: item.author.avatarUri }} style={{ width: 40, height: 40, borderRadius: 20 }} />
+                  ) : (
+                    <Text style={{ fontSize: 20 }}>{item.author.avatarEmoji}</Text>
+                  )}
+                </View>
+                <View style={{ alignItems: "flex-end" }}>
+                  <Text style={styles.authorName}>
+                    {item.author.name} {item.author.verified ? "☑️" : ""}
+                  </Text>
+                  <Text style={styles.meta}>
+                    {item.createdAt} {item.location ? `· ${item.location}` : ""}
+                  </Text>
+                </View>
               </View>
+              <TouchableOpacity onPress={() => openPostMenu(item)} style={styles.moreBtn}>
+                <Text style={styles.moreText}>⋯</Text>
+              </TouchableOpacity>
+            </View>
+
+            {!!item.content && <Text style={styles.content}>{item.content}</Text>}
+            {!!item.imageUri && <Image source={{ uri: item.imageUri }} style={styles.postImage} />}
+
+            <View style={styles.actionsRow}>
+              <TouchableOpacity style={styles.actionBtn} onPress={() => toggleLike(item.id)}>
+                <Text style={styles.actionText}>
+                  {item.likedByMe ? "❤️" : "🤍"} {item.likes}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.actionBtn}
+                onPress={() => setCommentingPostId(commentingPostId === item.id ? null : item.id)}
+              >
+                <Text style={styles.actionText}>💬 {item.comments.length}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.actionBtn} onPress={() => toggleSave(item.id)}>
+                <Text style={styles.actionText}>{item.savedByMe ? "🔖 محفوظ" : "📑 حفظ"}</Text>
+              </TouchableOpacity>
+            </View>
+
+            {commentingPostId === item.id && (
+              <View style={styles.commentsBox}>
+                {item.comments.map((c) => (
+                  <View key={c.id} style={styles.commentItem}>
+                    <Text style={styles.commentAuthor}>{c.userName}</Text>
+                    <Text style={styles.commentText}>{c.text}</Text>
+                  </View>
+                ))}
+                <View style={styles.commentInputRow}>
+                  <TextInput
+                    style={styles.commentInput}
+                    placeholder="اكتب تعليقاً..."
+                    placeholderTextColor={COLORS.muted}
+                    value={commentText}
+                    onChangeText={setCommentText}
+                  />
+                  <TouchableOpacity
+                    style={styles.sendCommentBtn}
+                    onPress={() => {
+                      addComment(item.id, commentText);
+                      setCommentText("");
+                    }}
+                  >
+                    <Text style={{ color: "#fff", fontWeight: "700", fontSize: 12 }}>إرسال</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+          </View>
+        )}
+      />
+
+      {/* Story Viewer Modal */}
+      <Modal visible={!!activeStory} transparent animationType="fade" onRequestClose={() => setActiveStory(null)}>
+        <TouchableOpacity style={styles.storyModal} activeOpacity={1} onPress={() => setActiveStory(null)}>
+          {activeStory && (
+            <View style={styles.storyCard}>
+              <Text style={{ color: COLORS.primary, fontWeight: "700", fontSize: 16, marginBottom: 12 }}>
+                {activeStory.avatarEmoji} {activeStory.userName}
+              </Text>
+              {!!activeStory.imageUri && <Image source={{ uri: activeStory.imageUri }} style={styles.storyModalImg} />}
+              {!!activeStory.text && <Text style={styles.storyModalText}>{activeStory.text}</Text>}
+              <Text style={{ color: COLORS.muted, fontSize: 12, marginTop: 18 }}>اضغط في أي مكان للإغلاق</Text>
             </View>
           )}
+        </TouchableOpacity>
+      </Modal>
+
+      {/* New Story Modal */}
+      <Modal visible={newStoryOpen} transparent animationType="slide" onRequestClose={() => setNewStoryOpen(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalBox}>
+            <Text style={styles.modalTitle}>✨ نشر قصة جديدة</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="اكتب نص قصتك..."
+              placeholderTextColor={COLORS.muted}
+              value={storyText}
+              onChangeText={setStoryText}
+            />
+            {storyImg && <Image source={{ uri: storyImg }} style={{ width: "100%", height: 150, borderRadius: 12, marginBottom: 10 }} />}
+            <View style={{ flexDirection: "row-reverse", gap: 8 }}>
+              <TouchableOpacity style={styles.outlineBtn} onPress={pickStoryImage}>
+                <Text style={{ color: COLORS.text, fontWeight: "700" }}>🖼️ صورة</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.primaryBtn}
+                onPress={() => {
+                  addStory(storyText, storyImg);
+                  setStoryText("");
+                  setStoryImg(undefined);
+                  setNewStoryOpen(false);
+                }}
+              >
+                <Text style={{ color: "#fff", fontWeight: "700" }}>نشر القصة</Text>
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity style={{ marginTop: 10, alignItems: "center" }} onPress={() => setNewStoryOpen(false)}>
+              <Text style={{ color: COLORS.muted }}>إلغاء</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      )}
-    />
+      </Modal>
+
+      {/* Notifications Modal */}
+      <Modal visible={notifOpen} transparent animationType="slide" onRequestClose={() => setNotifOpen(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalBox}>
+            <Text style={styles.modalTitle}>🔔 الإشعارات</Text>
+            {notifications.map((n) => (
+              <View key={n.id} style={styles.notifRow}>
+                <Text style={{ fontSize: 18 }}>{n.emoji}</Text>
+                <View style={{ flex: 1, alignItems: "flex-end" }}>
+                  <Text style={{ color: COLORS.text, fontSize: 13 }}>{n.text}</Text>
+                  <Text style={{ color: COLORS.muted, fontSize: 11 }}>{n.time}</Text>
+                </View>
+              </View>
+            ))}
+            <TouchableOpacity style={[styles.primaryBtn, { marginTop: 12 }]} onPress={() => setNotifOpen(false)}>
+              <Text style={{ color: "#fff", fontWeight: "700" }}>إغلاق</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </View>
   );
 }
 
@@ -147,7 +285,28 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   brand: { fontSize: 24, fontWeight: "800", color: COLORS.primary, letterSpacing: 1.5 },
-  badge: { color: COLORS.accent, fontSize: 12, fontWeight: "700" },
+  bellBtn: { position: "relative", padding: 6 },
+  bellBadge: {
+    position: "absolute",
+    top: 2,
+    right: 2,
+    backgroundColor: COLORS.danger,
+    borderRadius: 9,
+    minWidth: 16,
+    height: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  announceBox: {
+    backgroundColor: "rgba(139,92,246,0.18)",
+    borderColor: COLORS.primary,
+    borderWidth: 1,
+    marginHorizontal: 12,
+    marginBottom: 8,
+    padding: 10,
+    borderRadius: 12,
+  },
+  announceText: { color: COLORS.text, fontSize: 13, fontWeight: "700", textAlign: "right" },
   storiesRow: { paddingHorizontal: 12, paddingVertical: 10, gap: 12 },
   storyItem: { alignItems: "center", width: 68 },
   storyRing: {
@@ -211,10 +370,46 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     textAlign: "right",
   },
-  sendCommentBtn: {
-    backgroundColor: COLORS.primary,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    justifyContent: "center",
+  sendCommentBtn: { backgroundColor: COLORS.primary, borderRadius: 10, paddingHorizontal: 14, justifyContent: "center" },
+  storyModal: { flex: 1, backgroundColor: "rgba(0,0,0,0.9)", justifyContent: "center", alignItems: "center", padding: 20 },
+  storyCard: {
+    width: "100%",
+    backgroundColor: COLORS.surface,
+    borderRadius: 22,
+    padding: 20,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+  },
+  storyModalImg: { width: "100%", height: 260, borderRadius: 14, marginBottom: 12 },
+  storyModalText: { color: COLORS.text, fontSize: 18, fontWeight: "700", textAlign: "center", lineHeight: 28 },
+  modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.65)", justifyContent: "center", padding: 20 },
+  modalBox: { backgroundColor: COLORS.surface, borderRadius: 18, padding: 18, borderWidth: 1, borderColor: COLORS.border },
+  modalTitle: { color: COLORS.text, fontSize: 17, fontWeight: "700", textAlign: "right", marginBottom: 12 },
+  modalInput: {
+    backgroundColor: COLORS.surface2,
+    borderRadius: 12,
+    padding: 12,
+    color: COLORS.text,
+    textAlign: "right",
+    marginBottom: 10,
+  },
+  primaryBtn: { flex: 1, backgroundColor: COLORS.primary, borderRadius: 12, padding: 12, alignItems: "center" },
+  outlineBtn: {
+    flex: 1,
+    backgroundColor: COLORS.surface2,
+    borderRadius: 12,
+    padding: 12,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  notifRow: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
   },
 });

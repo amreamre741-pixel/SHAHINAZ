@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState } from "react";
-import type { ChatThread, Post, Story, User } from "../types";
+import type { ChatThread, MarketItem, NotificationItem, Post, Story, User } from "../types";
 
 export interface ReportItem {
   id: string;
@@ -14,6 +14,8 @@ interface AppContextValue {
   allPosts: Post[];
   allUsers: User[];
   stories: Story[];
+  notifications: NotificationItem[];
+  marketItems: MarketItem[];
   chats: ChatThread[];
   blockedUserIds: string[];
   reportedPostIds: string[];
@@ -24,10 +26,15 @@ interface AppContextValue {
   login: (name: string, username: string) => void;
   logout: () => void;
   deleteAccount: () => void;
+  updateProfile: (name: string, bio: string, avatarUri?: string) => void;
   toggleLike: (postId: string) => void;
   toggleSave: (postId: string) => void;
   addComment: (postId: string, text: string) => void;
   createPost: (content: string, imageUri?: string, location?: string) => void;
+  addStory: (text: string, imageUri?: string) => void;
+  markStorySeen: (storyId: string) => void;
+  markAllNotificationsRead: () => void;
+  addMarketItem: (item: Omit<MarketItem, "id" | "sellerName" | "createdAt">) => void;
   reportPost: (postId: string, reason: string) => void;
   blockUser: (userId: string) => void;
   unblockUser: (userId: string) => void;
@@ -47,10 +54,20 @@ const DEMO_USERS: User[] = [
 ];
 
 const INITIAL_STORIES: Story[] = [
-  { id: "st_1", userName: "قصتك", avatarEmoji: "➕", seen: false },
-  { id: "st_2", userName: "ياسين", avatarEmoji: "🧔🏻", seen: false },
-  { id: "st_3", userName: "سارة", avatarEmoji: "👩🏻‍🎨", seen: false },
-  { id: "st_4", userName: "كريم", avatarEmoji: "👨🏻‍💻", seen: true },
+  { id: "st_2", userName: "ياسين", avatarEmoji: "🧔🏻", text: "مرحباً بالجميع في SHAHINAZ! 🔥🇩🇿", seen: false },
+  { id: "st_3", userName: "سارة", avatarEmoji: "👩🏻‍🎨", text: "أجواء جميلة اليوم في وهران 🌊✨", seen: false },
+  { id: "st_4", userName: "كريم", avatarEmoji: "👨🏻‍💻", text: "جديد التجارة الإلكترونية قريباً 🚀", seen: true },
+];
+
+const INITIAL_NOTIFS: NotificationItem[] = [
+  { id: "n_1", emoji: "❤️", text: "أعجبت سارة منصوري بمنشورك", time: "منذ 5 د", read: false },
+  { id: "n_2", emoji: "💬", text: "علّق ياسين بن علي: تطبيق رائع بالتوفيق!", time: "منذ 15 د", read: false },
+  { id: "n_3", emoji: "👤", text: "بدأ كريم تكنولوجي بمتابعتك", time: "منذ ساعة", read: true },
+];
+
+const INITIAL_MARKET: MarketItem[] = [
+  { id: "mk_1", title: "هاتف Samsung A55 جديد", priceDzd: 58000, city: "الجزائر العاصمة", sellerName: "كريم تكنولوجي", phone: "0550123456", emoji: "📱", createdAt: "اليوم" },
+  { id: "mk_2", title: "ساعة ذكية أصلية مقاومة للماء", priceDzd: 6500, city: "سطيف", sellerName: "ياسين بن علي", phone: "0661234567", emoji: "⌚", createdAt: "أمس" },
 ];
 
 const INITIAL_POSTS: Post[] = [
@@ -105,7 +122,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [users, setUsers] = useState<User[]>(DEMO_USERS);
   const [posts, setPosts] = useState<Post[]>(INITIAL_POSTS);
-  const [stories] = useState<Story[]>(INITIAL_STORIES);
+  const [stories, setStories] = useState<Story[]>(INITIAL_STORIES);
+  const [notifications, setNotifications] = useState<NotificationItem[]>(INITIAL_NOTIFS);
+  const [marketItems, setMarketItems] = useState<MarketItem[]>(INITIAL_MARKET);
   const [chats, setChats] = useState<ChatThread[]>(INITIAL_CHATS);
   const [blockedUserIds, setBlockedUserIds] = useState<string[]>([]);
   const [reportedPostIds, setReportedPostIds] = useState<string[]>([]);
@@ -137,6 +156,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setBlockedUserIds([]);
     setReportedPostIds([]);
     setReports([]);
+  }
+
+  function updateProfile(name: string, bio: string, avatarUri?: string) {
+    setCurrentUser((prev) =>
+      prev
+        ? {
+            ...prev,
+            name: name.trim() || prev.name,
+            bio: bio.trim(),
+            avatarUri: avatarUri ?? prev.avatarUri,
+          }
+        : prev
+    );
   }
 
   function toggleLike(postId: string) {
@@ -193,6 +225,40 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setPosts((prev) => [newPost, ...prev]);
   }
 
+  function addStory(text: string, imageUri?: string) {
+    if (!currentUser || (!text.trim() && !imageUri)) return;
+    const newStory: Story = {
+      id: `st_${Date.now()}`,
+      userName: currentUser.name,
+      avatarEmoji: currentUser.avatarEmoji,
+      text: text.trim() || undefined,
+      imageUri,
+      seen: false,
+    };
+    setStories((prev) => [newStory, ...prev]);
+  }
+
+  function markStorySeen(storyId: string) {
+    setStories((prev) => prev.map((s) => (s.id === storyId ? { ...s, seen: true } : s)));
+  }
+
+  function markAllNotificationsRead() {
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+  }
+
+  function addMarketItem(item: Omit<MarketItem, "id" | "sellerName" | "createdAt">) {
+    if (!currentUser) return;
+    setMarketItems((prev) => [
+      {
+        ...item,
+        id: `mk_${Date.now()}`,
+        sellerName: currentUser.name,
+        createdAt: "الآن",
+      },
+      ...prev,
+    ]);
+  }
+
   function reportPost(postId: string, reason: string) {
     setReportedPostIds((prev) => (prev.includes(postId) ? prev : [...prev, postId]));
     setReports((prev) => [{ id: `rep_${Date.now()}`, postId, reason, createdAt: "الآن" }, ...prev]);
@@ -223,7 +289,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // Admin actions
   function adminDeletePost(postId: string) {
     setPosts((prev) => prev.filter((p) => p.id !== postId));
     setReports((prev) => prev.filter((r) => r.postId !== postId));
@@ -233,9 +298,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   function adminDismissReport(reportId: string) {
     const rep = reports.find((r) => r.id === reportId);
     setReports((prev) => prev.filter((r) => r.id !== reportId));
-    if (rep) {
-      setReportedPostIds((prev) => prev.filter((id) => id !== rep.postId));
-    }
+    if (rep) setReportedPostIds((prev) => prev.filter((id) => id !== rep.postId));
   }
 
   function adminToggleVerify(userId: string) {
@@ -267,6 +330,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         allPosts: posts,
         allUsers: users,
         stories,
+        notifications,
+        marketItems,
         chats: chats.filter((c) => !blockedUserIds.includes(c.user.id)),
         blockedUserIds,
         reportedPostIds,
@@ -277,10 +342,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         login,
         logout,
         deleteAccount,
+        updateProfile,
         toggleLike,
         toggleSave,
         addComment,
         createPost,
+        addStory,
+        markStorySeen,
+        markAllNotificationsRead,
+        addMarketItem,
         reportPost,
         blockUser,
         unblockUser,

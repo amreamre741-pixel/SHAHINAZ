@@ -4,6 +4,7 @@ export interface User {
   username: string;
   bio: string;
   avatarEmoji: string;
+  avatarUri?: string;
   verified?: boolean;
   followers: number;
   following: number;
@@ -34,7 +35,29 @@ export interface Story {
   id: string;
   userName: string;
   avatarEmoji: string;
+  text?: string;
+  imageUri?: string;
   seen: boolean;
+}
+
+export interface NotificationItem {
+  id: string;
+  emoji: string;
+  text: string;
+  time: string;
+  read: boolean;
+}
+
+export interface MarketItem {
+  id: string;
+  title: string;
+  priceDzd: number;
+  city: string;
+  sellerName: string;
+  phone: string;
+  imageUri?: string;
+  emoji: string;
+  createdAt: string;
 }
 
 export interface ChatThread {

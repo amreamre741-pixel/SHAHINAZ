@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Alert, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import * as ImagePicker from "expo-image-picker";
 import { COLORS } from "../theme";
 import { useApp } from "../store/AppContext";
 import AdminScreen from "./AdminScreen";
@@ -7,15 +8,30 @@ import AdminScreen from "./AdminScreen";
 const ADMIN_PIN = "1994";
 
 export default function ProfileScreen() {
-  const { currentUser, posts, blockedUserIds, logout, deleteAccount } = useApp();
+  const { currentUser, posts, blockedUserIds, updateProfile, logout, deleteAccount } = useApp();
   const [showAdmin, setShowAdmin] = useState(false);
   const [pinPrompt, setPinPrompt] = useState(false);
   const [pinInput, setPinInput] = useState("");
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState(currentUser?.name || "");
+  const [editBio, setEditBio] = useState(currentUser?.bio || "");
 
   if (!currentUser) return null;
   if (showAdmin) return <AdminScreen onClose={() => setShowAdmin(false)} />;
 
   const myPosts = posts.filter((p) => p.author.id === currentUser.id);
+
+  async function pickAvatar() {
+    const res = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+    if (!res.canceled && res.assets[0]?.uri) {
+      updateProfile(currentUser!.name, currentUser!.bio, res.assets[0].uri);
+    }
+  }
 
   function handleCheckPin() {
     if (pinInput.trim() === ADMIN_PIN) {
@@ -48,9 +64,14 @@ export default function ProfileScreen() {
   return (
     <ScrollView style={styles.container}>
       <View style={styles.headerCard}>
-        <View style={styles.avatar}>
-          <Text style={{ fontSize: 36 }}>{currentUser.avatarEmoji}</Text>
-        </View>
+        <TouchableOpacity style={styles.avatar} onPress={pickAvatar}>
+          {currentUser.avatarUri ? (
+            <Image source={{ uri: currentUser.avatarUri }} style={{ width: 78, height: 78, borderRadius: 39 }} />
+          ) : (
+            <Text style={{ fontSize: 36 }}>{currentUser.avatarEmoji}</Text>
+          )}
+        </TouchableOpacity>
+        <Text style={{ color: COLORS.muted, fontSize: 11, marginBottom: 6 }}>اضغط على الصورة لتغييرها</Text>
         <Text style={styles.name}>
           {currentUser.name} {currentUser.verified ? "☑️" : ""}
         </Text>
@@ -71,6 +92,33 @@ export default function ProfileScreen() {
             <Text style={styles.statLabel}>يتابِع</Text>
           </View>
         </View>
+
+        <TouchableOpacity
+          style={[styles.outlineBtn, { marginTop: 14, width: "100%" }]}
+          onPress={() => {
+            setEditName(currentUser.name);
+            setEditBio(currentUser.bio);
+            setEditing((v) => !v);
+          }}
+        >
+          <Text style={styles.outlineBtnText}>{editing ? "إغلاق التعديل" : "✏️ تعديل الملف الشخصي"}</Text>
+        </TouchableOpacity>
+
+        {editing && (
+          <View style={{ width: "100%", marginTop: 12, gap: 8 }}>
+            <TextInput style={styles.pinInput} placeholder="الاسم" placeholderTextColor={COLORS.muted} value={editName} onChangeText={setEditName} />
+            <TextInput style={styles.pinInput} placeholder="السيرة الذاتية (البايو)" placeholderTextColor={COLORS.muted} value={editBio} onChangeText={setEditBio} />
+            <TouchableOpacity
+              style={styles.pinGoBtn}
+              onPress={() => {
+                updateProfile(editName, editBio);
+                setEditing(false);
+              }}
+            >
+              <Text style={{ color: "#fff", fontWeight: "700", textAlign: "center", paddingVertical: 8 }}>حفظ التغييرات ✓</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
 
       <View style={styles.section}>
@@ -129,7 +177,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surface2,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 10,
+    marginBottom: 6,
   },
   name: { color: COLORS.text, fontSize: 18, fontWeight: "700" },
   username: { color: COLORS.primary, fontSize: 13, marginTop: 2 },
