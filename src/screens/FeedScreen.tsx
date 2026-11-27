@@ -19,6 +19,7 @@ import {
   View,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
+import { ResizeMode, Video } from "expo-av";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useApp } from "../store/AppContext";
@@ -31,6 +32,7 @@ import ThemeStudioModal from "../components/ThemeStudioModal";
 import AuroraBackground from "../components/AuroraBackground";
 import LiveStreamModal from "../components/LiveStreamModal";
 import WalletModal from "../components/WalletModal";
+import FriendsModal from "../components/FriendsModal";
 import { PulseDot } from "../components/LuxuryMotion";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -166,6 +168,7 @@ export default function FeedScreen() {
   const [themeOpen, setThemeOpen] = useState(false);
   const [liveOpen, setLiveOpen] = useState(false);
   const [walletOpen, setWalletOpen] = useState(false);
+  const [friendsOpen, setFriendsOpen] = useState(false);
   const [devVaultOpen, setDevVaultOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
   const [selectedAuthorId, setSelectedAuthorId] = useState<string | null>(null);
@@ -490,6 +493,14 @@ export default function FeedScreen() {
               contentContainerStyle={{ paddingHorizontal: 14, gap: 8, paddingTop: 4, paddingBottom: 4 }}
             >
               <TouchableOpacity
+                style={[styles.quickHubPill, { backgroundColor: theme.primarySoft, borderColor: theme.borderGlow }]}
+                onPress={() => setFriendsOpen(true)}
+              >
+                <Ionicons name="person-add" size={14} color={theme.primary} />
+                <Text style={{ color: theme.primary, fontSize: 11.5, fontWeight: "900" }}>إضافة صديق</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
                 style={[styles.quickHubPill, { backgroundColor: "rgba(239,68,68,0.14)", borderColor: "rgba(239,68,68,0.45)" }]}
                 onPress={() => setLiveOpen(true)}
               >
@@ -604,8 +615,22 @@ export default function FeedScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Caption above media if short or clean below — let's keep crisp caption below media, or full gradient card */}
-            {!!item.imageUri ? (
+            {/* Real Playable Video OR Double-Tap Photo OR Gradient Text Card */}
+            {!!item.videoUri ? (
+              <View style={styles.mediaWrap}>
+                <Video
+                  source={{ uri: item.videoUri }}
+                  style={styles.postImage}
+                  useNativeControls
+                  resizeMode={ResizeMode.COVER}
+                  isLooping
+                />
+                <View style={styles.mediaFloatingTag}>
+                  <Ionicons name="videocam" size={12} color="#FDE68A" />
+                  <Text style={styles.mediaFloatingTagText}>فيديو 🎬</Text>
+                </View>
+              </View>
+            ) : !!item.imageUri ? (
               <PostMediaWithDoubleTap
                 imageUri={item.imageUri}
                 location={item.location}
@@ -1167,7 +1192,7 @@ export default function FeedScreen() {
 
               {/* Stealth 5-Tap Developer Entry Footer */}
               <TouchableOpacity activeOpacity={0.7} onPress={handleSecretVersionTap} style={styles.versionFooter}>
-                <Text style={[styles.versionText, { color: theme.muted }]}>SHAHINAZ Ultra 5.0 · Royal Platinum</Text>
+                <Text style={[styles.versionText, { color: theme.muted }]}>SHAHINAZ v2.0.0 · Native Live & Friends</Text>
               </TouchableOpacity>
             </ScrollView>
           </View>
@@ -1179,6 +1204,7 @@ export default function FeedScreen() {
       <ThemeStudioModal visible={themeOpen} onClose={() => setThemeOpen(false)} />
       <LiveStreamModal visible={liveOpen} onClose={() => setLiveOpen(false)} />
       <WalletModal visible={walletOpen} onClose={() => setWalletOpen(false)} />
+      <FriendsModal visible={friendsOpen} onClose={() => setFriendsOpen(false)} />
 
       <DevVaultModal
         visible={devVaultOpen}

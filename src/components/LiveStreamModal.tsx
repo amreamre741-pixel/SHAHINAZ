@@ -11,22 +11,26 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { CameraView, useCameraPermissions } from "expo-camera";
+import { Audio } from "expo-av";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useApp } from "../store/AppContext";
+import { apiFetch } from "../services/api";
 import { PulseDot } from "./LuxuryMotion";
 
-interface LiveChannel {
+interface LiveRoomItem {
   id: string;
   host: string;
   title: string;
   viewers: number;
-  avatarUri: string;
-  coverUri: string;
+  avatarUri?: string;
+  coverUri?: string;
+  isReal?: boolean;
   pinnedProduct?: { title: string; priceDzd: number };
 }
 
-const LIVE_CHANNELS: LiveChannel[] = [
+const FALLBACK_CHANNELS: LiveRoomItem[] = [
   {
     id: "live_1",
     host: "كريم تكنولوجي",
@@ -44,33 +48,22 @@ const LIVE_CHANNELS: LiveChannel[] = [
     avatarUri: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&q=80",
     coverUri: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1000&q=85",
   },
-  {
-    id: "live_3",
-    host: "ياسين بن علي",
-    title: "ورشة تصميم وتصوير احترافي بالهاتف 📸🇩🇿",
-    viewers: 614,
-    avatarUri: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&q=80",
-    coverUri: "https://images.unsplash.com/photo-1519681393784-d120267933ba?w=1000&q=85",
-  },
-];
-
-const SIM_MESSAGES = [
-  { user: "أمين_وهران", text: "ما شاء الله جودة البث خرافية 🔥🇩🇿" },
-  { user: "نسرين_16", text: "هل التوصيل متوفر للجزائر العاصمة في 24 ساعة؟" },
-  { user: "وليد_سطيف", text: "أجمل تطبيق جزائري بصراحة 👏👑" },
-  { user: "مريم_قسنطينة", text: "تم الطلب بنجاح شكراً على التخفيض ✨" },
 ];
 
 export default function LiveStreamModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
-  const { currentUser, theme, sendLiveGift, placeCodOrder } = useApp();
+  const { currentUser, token, theme, sendLiveGift, placeCodOrder } = useApp();
+  const [cameraPerm, requestCameraPerm] = useCameraPermissions();
+  const [facing, setFacing] = useState<"front" | "back">("front");
+  const [micMuted, setMicMuted] = useState(false);
+
+  const [channels, setChannels] = useState<LiveRoomItem[]>(FALLBACK_CHANNELS);
   const [channelIdx, setChannelIdx] = useState(0);
   const [isHosting, setIsHosting] = useState(false);
+  const [activeLiveRoomId, setActiveLiveRoomId] = useState<string | null>(null);
   const [hostTitle, setHostTitle] = useState("بثي المباشر على SHAHINAZ 🔴✨");
-  const [viewers, setViewers] = useState(LIVE_CHANNELS[0].viewers);
   const [chatMsg, setChatMsg] = useState("");
   const [messages, setMessages] = useState<{ id: string; user: string; text: string }[]>([
-    { id: "m1", user: "سارة_DZ", text: "أهلاً بالجميع في بث SHAHINAZ LIVE! ✨🔥" },
-    { id: "m2", user: "مراد_31", text: "تحية كبيرة من وهران الباهية 🇩🇿" },
+    { id: "m1", user: "SHAHINAZ LIVE", text: "أهلاً بك في البث المباشر — الكاميرا والدردشة جاهزة! 🔴" },
   ]);
   const [giftBanner, setGiftBanner] = useState("");
   const [floatingEmoji, setFloatingEmoji] = useState("❤️");
@@ -78,18 +71,94 @@ export default function LiveStreamModal({ visible, onClose }: { visible: boolean
   const floatY = useRef(new Animated.Value(0)).current;
   const floatOpacity = useRef(new Animated.Value(0)).current;
 
-  const activeChannel = LIVE_CHANNELS[channelIdx] || LIVE_CHANNELS[0];
+  const activeChannel = channels[channelIdx] || channels[0];
+
+  async function loadRealLiveRooms() {
+    if (!token) return;
+    try {
+      const rows = await apiFetch<any[]>("/api/rooms?kind=LIVE", token);
+      if (Array.isArray(rows) && rows.length > 0) {
+        const mapped: LiveRoomItem[] = rows.map((r) => ({
+          id: r.id,
+          host: r.host?.name || "مذيع SHAHINAZ",
+          title: r.title,
+          viewers: r.viewers || 1,
+          avatarUri: r.host?.avatarUrl || undefined,
+          coverUri: "https://images.unsplash.com/photo-1519681393784-d120267933ba?w=1000&q=85",
+          isReal: true,
+        }));
+        setChannels([...mapped, ...FALLBACK_CHANNELS]);
+      }
+    } catch {
+      // keep fallback channels if offline
+    }
+  }
 
   useEffect(() => {
-    if (!visible) return;
-    setViewers(isHosting ? 48 : activeChannel.viewers);
-    const interval = setInterval(() => {
-      setViewers((v) => Math.max(12, v + Math.floor(Math.random() * 11) - 3));
-      const pick = SIM_MESSAGES[Math.floor(Math.random() * SIM_MESSAGES.length)];
-      setMessages((prev) => [{ id: `sim_${Date.now()}`, ...pick }, ...prev.slice(0, 14)]);
-    }, 4200);
-    return () => clearInterval(interval);
-  }, [visible, channelIdx, isHosting]);
+    if (visible) {
+      loadRealLiveRooms();
+    }
+  }, [visible]);
+
+  // Poll real live room chat every 3s
+  useEffect(() => {
+    const roomId = isHosting ? activeLiveRoomId : activeChannel?.isReal ? activeChannel.id : null;
+    if (!visible || !token || !roomId) return;
+
+    async function fetchMsgs() {
+      try {
+        const rows = await apiFetch<any[]>(`/api/rooms/${roomId}/messages`, token);
+        if (Array.isArray(rows)) {
+          setMessages(
+            rows.map((m) => ({
+              id: m.id,
+              user: m.user?.name || "مشاهد",
+              text: m.text,
+            }))
+          );
+        }
+      } catch {
+        // ignore polling errors
+      }
+    }
+    fetchMsgs();
+    const t = setInterval(fetchMsgs, 3000);
+    return () => clearInterval(t);
+  }, [visible, isHosting, activeLiveRoomId, activeChannel?.id]);
+
+  async function handleToggleGoLive() {
+    if (isHosting) {
+      if (token && activeLiveRoomId) {
+        apiFetch(`/api/rooms/${activeLiveRoomId}/end`, token, { method: "POST" }).catch(() => {});
+      }
+      setIsHosting(false);
+      setActiveLiveRoomId(null);
+      return;
+    }
+
+    const camRes = cameraPerm?.granted ? cameraPerm : await requestCameraPerm();
+    const micRes = await Audio.requestPermissionsAsync();
+    if (!camRes.granted || !micRes.granted) {
+      Alert.alert(
+        "صلاحية الكاميرا والميكروفون مطلوبة",
+        "يرجى منح صلاحية الكاميرا والميكروفون لفتح البث المباشر الحقيقي."
+      );
+      return;
+    }
+
+    setIsHosting(true);
+    if (token) {
+      try {
+        const created = await apiFetch<{ id: string }>("/api/rooms", token, {
+          method: "POST",
+          body: JSON.stringify({ title: hostTitle, topic: "بث مباشر", kind: "LIVE" }),
+        });
+        if (created?.id) setActiveLiveRoomId(created.id);
+      } catch {
+        // continue local camera broadcast
+      }
+    }
+  }
 
   function triggerHeartBurst(em: string) {
     setFloatingEmoji(em);
@@ -101,14 +170,21 @@ export default function LiveStreamModal({ visible, onClose }: { visible: boolean
     ]).start();
   }
 
-  function handleSendChat() {
+  async function handleSendChat() {
     const clean = chatMsg.trim();
     if (!clean) return;
+    setChatMsg("");
     setMessages((prev) => [
       { id: `me_${Date.now()}`, user: currentUser?.name || "أنت", text: clean },
       ...prev.slice(0, 14),
     ]);
-    setChatMsg("");
+    const roomId = isHosting ? activeLiveRoomId : activeChannel?.isReal ? activeChannel.id : null;
+    if (token && roomId) {
+      apiFetch(`/api/rooms/${roomId}/messages`, token, {
+        method: "POST",
+        body: JSON.stringify({ text: clean }),
+      }).catch(() => {});
+    }
   }
 
   function handleSendGift(emoji: string, label: string, cost: number) {
@@ -127,7 +203,7 @@ export default function LiveStreamModal({ visible, onClose }: { visible: boolean
   }
 
   function handleQuickLiveOrder() {
-    if (!activeChannel.pinnedProduct) return;
+    if (!activeChannel?.pinnedProduct) return;
     placeCodOrder({
       productTitle: activeChannel.pinnedProduct.title,
       priceDzd: activeChannel.pinnedProduct.priceDzd,
@@ -135,52 +211,85 @@ export default function LiveStreamModal({ visible, onClose }: { visible: boolean
       phone: "0550000000",
       wilaya: "16 - الجزائر العاصمة",
     });
-    Alert.alert("🛍️ تم حجز العرض المباشر!", `تم تسجيل طلبك لـ "${activeChannel.pinnedProduct.title}" ويمكنك تتبعه من زر (طلباتي) في السوق!`);
+    Alert.alert("🛍️ تم حجز العرض المباشر!", `تم تسجيل طلبك لـ "${activeChannel.pinnedProduct.title}" ويمكنك تتبعه من (طلباتي)!`);
   }
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <View style={styles.root}>
-        {/* Full-Screen Stage Visual */}
+        {/* 100% REAL PHONE CAMERA WHEN HOSTING LIVE */}
         {isHosting ? (
-          <LinearGradient colors={theme.coverGrad} style={StyleSheet.absoluteFillObject} />
-        ) : (
+          <CameraView style={StyleSheet.absoluteFillObject} facing={facing} />
+        ) : activeChannel?.coverUri ? (
           <Image source={{ uri: activeChannel.coverUri }} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
+        ) : (
+          <LinearGradient colors={theme.coverGrad} style={StyleSheet.absoluteFillObject} />
         )}
+
         <LinearGradient
-          colors={["rgba(5,6,11,0.78)", "rgba(5,6,11,0.18)", "rgba(5,6,11,0.95)"]}
+          colors={["rgba(5,6,11,0.72)", "rgba(5,6,11,0.08)", "rgba(5,6,11,0.92)"]}
           style={StyleSheet.absoluteFillObject}
+          pointerEvents="none"
         />
 
-        {/* Top Bar: Host Info + Live Viewers + Close */}
+        {/* Top Bar */}
         <View style={styles.topBar}>
           <View style={styles.hostPill}>
             {isHosting ? (
-              <View style={[styles.hostAvatar, { backgroundColor: theme.primarySoft, alignItems: "center", justifyContent: "center" }]}>
-                <Ionicons name="videocam" size={18} color={theme.primary} />
+              <View style={[styles.hostAvatar, { backgroundColor: "rgba(239,68,68,0.28)", alignItems: "center", justifyContent: "center" }]}>
+                <Ionicons name="videocam" size={18} color="#FCA5A5" />
               </View>
-            ) : (
+            ) : activeChannel?.avatarUri ? (
               <Image source={{ uri: activeChannel.avatarUri }} style={styles.hostAvatar} />
+            ) : (
+              <View style={[styles.hostAvatar, { backgroundColor: theme.surface2, alignItems: "center", justifyContent: "center" }]}>
+                <Ionicons name="person" size={18} color="#fff" />
+              </View>
             )}
             <View style={{ alignItems: "flex-end" }}>
               <Text style={{ color: "#fff", fontWeight: "900", fontSize: 13 }}>
-                {isHosting ? currentUser?.name || "بثك المباشر" : activeChannel.host}
+                {isHosting ? currentUser?.name || "بثك المباشر" : activeChannel?.host}
               </Text>
               <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 5 }}>
                 <PulseDot color="#EF4444" size={7} />
                 <Text style={{ color: "#FCA5A5", fontSize: 11, fontWeight: "800" }}>
-                  مباشر · 👁️ {viewers.toLocaleString("fr-DZ")}
+                  {isHosting ? "الكاميرا مفتوحة مباشرة" : `مباشر · 👁️ ${activeChannel?.viewers || 1}`}
                 </Text>
               </View>
             </View>
           </View>
 
-          <TouchableOpacity onPress={onClose} style={styles.closeOrb}>
-            <Ionicons name="close" size={22} color="#fff" />
-          </TouchableOpacity>
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            {isHosting && (
+              <>
+                <TouchableOpacity
+                  onPress={() => setFacing((f) => (f === "front" ? "back" : "front"))}
+                  style={styles.closeOrb}
+                >
+                  <Ionicons name="camera-reverse-outline" size={21} color="#fff" />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setMicMuted((m) => !m)} style={styles.closeOrb}>
+                  <Ionicons name={micMuted ? "mic-off" : "mic"} size={20} color={micMuted ? "#FCA5A5" : "#fff"} />
+                </TouchableOpacity>
+              </>
+            )}
+            <TouchableOpacity
+              onPress={() => {
+                if (isHosting && token && activeLiveRoomId) {
+                  apiFetch(`/api/rooms/${activeLiveRoomId}/end`, token, { method: "POST" }).catch(() => {});
+                }
+                setIsHosting(false);
+                setActiveLiveRoomId(null);
+                onClose();
+              }}
+              style={styles.closeOrb}
+            >
+              <Ionicons name="close" size={22} color="#fff" />
+            </TouchableOpacity>
+          </View>
         </View>
 
-        {/* Channel Switcher + Go Live Toggle */}
+        {/* Channel Switcher + Real Camera Go Live Button */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -192,14 +301,14 @@ export default function LiveStreamModal({ visible, onClose }: { visible: boolean
               styles.chanChip,
               isHosting && { backgroundColor: "#DC2626", borderColor: "#FCA5A5" },
             ]}
-            onPress={() => setIsHosting((v) => !v)}
+            onPress={handleToggleGoLive}
           >
             <Text style={{ color: "#fff", fontWeight: "900", fontSize: 11.5 }}>
-              {isHosting ? "⏹️ إيقاف بثي" : "🔴 ابدأ بثك الآن"}
+              {isHosting ? "⏹️ إنهاء البث" : "🔴 افتح لايف بالكاميرا"}
             </Text>
           </TouchableOpacity>
 
-          {LIVE_CHANNELS.map((c, idx) => (
+          {channels.map((c, idx) => (
             <TouchableOpacity
               key={c.id}
               style={[
@@ -212,28 +321,23 @@ export default function LiveStreamModal({ visible, onClose }: { visible: boolean
               }}
             >
               <Text style={{ color: !isHosting && channelIdx === idx ? theme.primary : "#fff", fontWeight: "800", fontSize: 11.5 }}>
+                {c.isReal ? "🔴 " : ""}
                 {c.host}
               </Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
 
-        {/* Center Stage Banner / Hosting Title */}
+        {/* Center Overlay */}
         <View style={styles.centerStage}>
           {isHosting && (
-            <View style={[styles.hostingBox, { borderColor: theme.borderGlow }]}>
-              <PulseDot color="#EF4444" size={14} />
-              <Text style={{ color: "#fff", fontSize: 18, fontWeight: "900", textAlign: "center" }}>
-                أنت الآن على الهواء مباشرة! 🎙️
-              </Text>
-              <TextInput
-                style={styles.hostTitleInput}
-                value={hostTitle}
-                onChangeText={setHostTitle}
-                placeholder="عنوان بثك المباشر..."
-                placeholderTextColor="rgba(255,255,255,0.6)"
-              />
-            </View>
+            <TextInput
+              style={styles.hostTitleInput}
+              value={hostTitle}
+              onChangeText={setHostTitle}
+              placeholder="عنوان بثك المباشر..."
+              placeholderTextColor="rgba(255,255,255,0.7)"
+            />
           )}
 
           {!!giftBanner && (
@@ -242,7 +346,6 @@ export default function LiveStreamModal({ visible, onClose }: { visible: boolean
             </LinearGradient>
           )}
 
-          {/* Animated Floating Hearts Burst */}
           <Animated.View
             pointerEvents="none"
             style={[
@@ -257,9 +360,9 @@ export default function LiveStreamModal({ visible, onClose }: { visible: boolean
           </Animated.View>
         </View>
 
-        {/* Bottom Interactive Area: Pinned Live Product + Scrolling Chat + Gifts + Composer */}
+        {/* Bottom Interactive Area */}
         <View style={styles.bottomWrap}>
-          {!isHosting && activeChannel.pinnedProduct && (
+          {!isHosting && activeChannel?.pinnedProduct && (
             <View style={[styles.pinnedShopCard, { borderColor: theme.borderGlow }]}>
               <TouchableOpacity activeOpacity={0.9} onPress={handleQuickLiveOrder}>
                 <LinearGradient colors={theme.btnGrad} style={styles.liveBuyBtn}>
@@ -278,7 +381,6 @@ export default function LiveStreamModal({ visible, onClose }: { visible: boolean
             </View>
           )}
 
-          {/* Live Chat Feed */}
           <View style={styles.chatBox}>
             {messages.slice(0, 4).map((m) => (
               <View key={m.id} style={styles.liveChatLine}>
@@ -290,7 +392,6 @@ export default function LiveStreamModal({ visible, onClose }: { visible: boolean
             ))}
           </View>
 
-          {/* Gift & Reaction Quick Row */}
           <View style={styles.giftsBar}>
             <TouchableOpacity style={styles.heartTapBtn} onPress={() => triggerHeartBurst("❤️")}>
               <Text style={{ fontSize: 20 }}>❤️</Text>
@@ -306,7 +407,6 @@ export default function LiveStreamModal({ visible, onClose }: { visible: boolean
             </TouchableOpacity>
           </View>
 
-          {/* Live Chat Input */}
           <View style={styles.inputRow}>
             <TextInput
               style={styles.chatInput}
@@ -364,36 +464,22 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     justifyContent: "center",
   },
-  centerStage: { flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 20 },
-  hostingBox: {
-    width: "100%",
-    backgroundColor: "rgba(5,6,11,0.72)",
-    borderWidth: 1.2,
-    borderRadius: 24,
-    padding: 20,
-    alignItems: "center",
-    gap: 10,
-  },
+  centerStage: { flex: 1, justifyContent: "flex-start", alignItems: "center", paddingHorizontal: 20, paddingTop: 14 },
   hostTitleInput: {
     width: "100%",
-    backgroundColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(0,0,0,0.45)",
+    borderColor: "rgba(255,255,255,0.2)",
+    borderWidth: 1,
     borderRadius: 14,
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 8,
     color: "#fff",
     textAlign: "right",
+    fontSize: 13,
+    fontWeight: "700",
   },
-  giftAlertPill: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 999,
-    marginTop: 14,
-  },
-  floatingEmojiWrap: {
-    position: "absolute",
-    left: 26,
-    bottom: 20,
-  },
+  giftAlertPill: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 999, marginTop: 14 },
+  floatingEmojiWrap: { position: "absolute", left: 26, bottom: 20 },
   bottomWrap: { paddingHorizontal: 14, gap: 10 },
   pinnedShopCard: {
     flexDirection: "row-reverse",

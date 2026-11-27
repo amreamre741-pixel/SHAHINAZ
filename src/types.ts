@@ -51,6 +51,7 @@ export interface Post {
   author: User;
   content: string;
   imageUri?: string;
+  videoUri?: string;
   location?: string;
   bgColor?: string;
   isSponsored?: boolean;
@@ -105,13 +106,23 @@ export interface MarketItem {
   createdAt: string;
 }
 
+export interface ChatMessageItem {
+  id: string;
+  fromMe: boolean;
+  text: string;
+  imageUri?: string;
+  audioUri?: string;
+  durationSec?: number;
+  time: string;
+}
+
 export interface ChatThread {
   id: string;
   user: User;
   lastMessage: string;
   time: string;
   unread: number;
-  messages: { id: string; fromMe: boolean; text: string; imageUri?: string; time: string }[];
+  messages: ChatMessageItem[];
 }
 
 export interface NoteItem {

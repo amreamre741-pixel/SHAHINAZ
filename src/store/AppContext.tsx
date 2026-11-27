@@ -120,7 +120,14 @@ interface AppContextValue {
   setReaction: (postId: string, emoji: ReactionEmoji) => void;
   toggleSave: (postId: string) => void;
   addComment: (postId: string, text: string) => void;
-  createPost: (content: string, imageUri?: string, location?: string, bgColor?: string, pollOptions?: string[]) => void;
+  createPost: (
+    content: string,
+    imageUri?: string,
+    location?: string,
+    bgColor?: string,
+    pollOptions?: string[],
+    videoUri?: string
+  ) => void;
   deleteMyPost: (postId: string) => void;
   votePoll: (postId: string, optionId: string) => void;
   addStory: (text: string, imageUri?: string) => void;
@@ -136,7 +143,9 @@ interface AppContextValue {
   unblockUser: (userId: string) => void;
   markChatRead: (chatId: string) => void;
   startChatWithUser: (user: User) => string;
-  sendMessage: (chatId: string, text: string, imageUri?: string) => void;
+  sendMessage: (chatId: string, text: string, imageUri?: string, audioUri?: string, durationSec?: number) => void;
+  syncChatWithPeer: (chatId: string, peerId: string) => Promise<void>;
+  refreshThreads: () => Promise<void>;
   adminDeletePost: (postId: string) => void;
   adminToggleSponsor: (postId: string) => void;
   adminTogglePinPost: (postId: string) => void;
@@ -488,11 +497,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           },
           content: p.content || "",
           imageUri: p.imageUrl || undefined,
+          videoUri: p.videoUrl || undefined,
           location: p.location || undefined,
           likes: p._count?.likes ?? 0,
           likedByMe: Array.isArray(p.likes) && p.likes.length > 0,
           savedByMe: false,
-          comments: [],
+          comments: Array.isArray(p.comments)
+            ? p.comments.map((c: any) => ({
+                id: c.id,
+                userId: c.user?.id || c.userId,
+                userName: c.user?.name || "عضو",
+                text: c.text,
+                createdAt: new Date(c.createdAt).toLocaleTimeString("ar-DZ", { hour: "2-digit", minute: "2-digit" }),
+              }))
+            : [],
           createdAt: new Date(p.createdAt).toLocaleDateString("ar-DZ"),
         }));
         setPosts(mapped);
@@ -797,12 +815,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     );
   }
 
-  function createPost(content: string, imageUri?: string, location?: string, bgColor?: string, pollOptions?: string[]) {
-    if (!currentUser || (!content.trim() && !imageUri)) return;
+  function createPost(
+    content: string,
+    imageUri?: string,
+    location?: string,
+    bgColor?: string,
+    pollOptions?: string[],
+    videoUri?: string
+  ) {
+    if (!currentUser || (!content.trim() && !imageUri && !videoUri)) return;
     if (token) {
       apiFetch("/api/posts", token, {
         method: "POST",
-        body: JSON.stringify({ content: content.trim(), imageUrl: imageUri || "", location: location?.trim() || "" }),
+        body: JSON.stringify({
+          content: content.trim(),
+          imageUrl: imageUri || "",
+          videoUrl: videoUri || "",
+          location: location?.trim() || "",
+        }),
       })
         .then(() => refreshPosts(token))
         .catch(() => {});
@@ -813,8 +843,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       author: currentUser,
       content: content.trim(),
       imageUri,
+      videoUri,
       location: location?.trim() || undefined,
-      bgColor: !imageUri ? bgColor : undefined,
+      bgColor: !imageUri && !videoUri ? bgColor : undefined,
       poll:
         cleanOpts.length >= 2
           ? {
@@ -915,25 +946,138 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return newId;
   }
 
-  function sendMessage(chatId: string, text: string, imageUri?: string) {
+  function sendMessage(
+    chatId: string,
+    text: string,
+    imageUri?: string,
+    audioUri?: string,
+    durationSec?: number
+  ) {
     const clean = text.trim();
-    if (!clean && !imageUri) return;
+    if (!clean && !imageUri && !audioUri) return;
+    const targetChat = chats.find((c) => c.id === chatId);
+    const preview = audioUri
+      ? `🎙️ رسالة صوتية (${durationSec || 1}ث)`
+      : imageUri
+      ? "📷 صورة"
+      : clean;
+
+    if (token && targetChat && !targetChat.user.id.startsWith("u_")) {
+      apiFetch(`/api/messages/${targetChat.user.id}`, token, {
+        method: "POST",
+        body: JSON.stringify({
+          text: clean,
+          imageUrl: imageUri || "",
+          audioUrl: audioUri || "",
+          durationSec: durationSec || 0,
+        }),
+      }).catch(() => {});
+    }
+
     setChats((prev) =>
       prev.map((ch) =>
         ch.id === chatId
           ? {
               ...ch,
-              lastMessage: imageUri ? "📷 صورة" : clean,
+              lastMessage: preview,
               time: "الآن",
               unread: 0,
               messages: [
                 ...ch.messages,
-                { id: `m_${Date.now()}`, fromMe: true, text: clean, imageUri, time: "الآن" },
+                {
+                  id: `m_${Date.now()}`,
+                  fromMe: true,
+                  text: clean,
+                  imageUri,
+                  audioUri,
+                  durationSec,
+                  time: "الآن",
+                },
               ],
             }
           : ch
       )
     );
+  }
+
+  async function syncChatWithPeer(chatId: string, peerId: string) {
+    if (!token || !currentUser || peerId.startsWith("u_")) return;
+    try {
+      const rows = await apiFetch<any[]>(`/api/messages/${peerId}`, token);
+      if (!Array.isArray(rows)) return;
+      const mapped = rows.map((m) => ({
+        id: m.id,
+        fromMe: m.senderId === currentUser.id,
+        text: m.text || "",
+        imageUri: m.imageUrl || undefined,
+        audioUri: m.audioUrl || undefined,
+        durationSec: m.durationSec || undefined,
+        time: new Date(m.createdAt).toLocaleTimeString("ar-DZ", { hour: "2-digit", minute: "2-digit" }),
+      }));
+      const last = mapped[mapped.length - 1];
+      setChats((prev) =>
+        prev.map((ch) =>
+          ch.id === chatId
+            ? {
+                ...ch,
+                messages: mapped,
+                lastMessage: last
+                  ? last.audioUri
+                    ? `🎙️ رسالة صوتية (${last.durationSec || 1}ث)`
+                    : last.imageUri
+                    ? "📷 صورة"
+                    : last.text
+                  : ch.lastMessage,
+                time: last ? last.time : ch.time,
+              }
+            : ch
+        )
+      );
+    } catch {
+      // keep local state if offline
+    }
+  }
+
+  async function refreshThreads() {
+    if (!token || !currentUser) return;
+    try {
+      const apiThreads = await apiFetch<any[]>("/api/messages/threads", token);
+      if (!Array.isArray(apiThreads) || apiThreads.length === 0) return;
+      setChats((prev) => {
+        const next = [...prev];
+        for (const t of apiThreads) {
+          const peer = t.peer;
+          if (!peer?.id) continue;
+          const idx = next.findIndex((c) => c.user.id === peer.id);
+          const timeStr = new Date(t.lastTime).toLocaleTimeString("ar-DZ", { hour: "2-digit", minute: "2-digit" });
+          if (idx >= 0) {
+            next[idx] = { ...next[idx], lastMessage: t.lastMessage, time: timeStr };
+          } else {
+            next.unshift({
+              id: `ch_${peer.id}`,
+              user: {
+                id: peer.id,
+                name: peer.name,
+                username: peer.username,
+                bio: peer.bio || "",
+                avatarEmoji: "👤",
+                avatarUri: peer.avatarUrl || undefined,
+                verified: !!peer.verified,
+                followers: 0,
+                following: 0,
+              },
+              lastMessage: t.lastMessage,
+              time: timeStr,
+              unread: 0,
+              messages: [],
+            });
+          }
+        }
+        return next;
+      });
+    } catch {
+      // ignore if offline
+    }
   }
 
   function adminDeletePost(postId: string) {
@@ -1425,6 +1569,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         markChatRead,
         startChatWithUser,
         sendMessage,
+        syncChatWithPeer,
+        refreshThreads,
         adminDeletePost,
         adminToggleSponsor,
         adminTogglePinPost,

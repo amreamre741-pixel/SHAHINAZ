@@ -26,6 +26,10 @@ model User {
   blocksRecvd  Block[]   @relation("Blocked")
   sentMsgs     Message[] @relation("Sender")
   recvdMsgs    Message[] @relation("Receiver")
+  friendsSent  FriendRequest[] @relation("FriendSender")
+  friendsRecvd FriendRequest[] @relation("FriendReceiver")
+  liveRooms    LiveRoom[]
+  roomMsgs     LiveRoomMessage[]
 }
 
 model Post {
@@ -34,6 +38,7 @@ model Post {
   author    User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
   content   String    @default("")
   imageUrl  String    @default("")
+  videoUrl  String    @default("")
   location  String    @default("")
   createdAt DateTime  @default(now())
 
@@ -87,11 +92,56 @@ model Report {
 }
 
 model Message {
+  id          String   @id @default(cuid())
+  senderId    String
+  receiverId  String
+  text        String   @default("")
+  imageUrl    String   @default("")
+  audioUrl    String   @default("")
+  durationSec Int      @default(0)
+  sender      User     @relation("Sender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver    User     @relation("Receiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  @@index([senderId, receiverId, createdAt])
+}
+
+model FriendRequest {
   id         String   @id @default(cuid())
   senderId   String
   receiverId String
-  text       String
-  sender     User     @relation("Sender", fields: [senderId], references: [id], onDelete: Cascade)
-  receiver   User     @relation("Receiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  status     String   @default("PENDING")
+  sender     User     @relation("FriendSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver   User     @relation("FriendReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
   createdAt  DateTime @default(now())
+
+  @@unique([senderId, receiverId])
+}
+
+model LiveRoom {
+  id        String   @id @default(cuid())
+  hostId    String
+  host      User     @relation(fields: [hostId], references: [id], onDelete: Cascade)
+  title     String
+  topic     String   @default("دردشة مباشرة")
+  kind      String   @default("LIVE")
+  isActive  Boolean  @default(true)
+  viewers   Int      @default(1)
+  createdAt DateTime @default(now())
+
+  messages  LiveRoomMessage[]
+}
+
+model LiveRoomMessage {
+  id          String   @id @default(cuid())
+  roomId      String
+  userId      String
+  text        String   @default("")
+  audioUrl    String   @default("")
+  durationSec Int      @default(0)
+  room        LiveRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  @@index([roomId, createdAt])
 }

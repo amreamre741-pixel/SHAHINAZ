@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Dimensions,
@@ -14,12 +14,16 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { Audio } from "expo-av";
+import * as FileSystem from "expo-file-system";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useApp } from "../store/AppContext";
+import { apiFetch } from "../services/api";
 import type { AudioRoom } from "../types";
 import ShahinazAiModal from "../components/ShahinazAiModal";
 import AuroraBackground from "../components/AuroraBackground";
+import VoiceMessagePlayer from "../components/VoiceMessagePlayer";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const GRID_SIZE = (SCREEN_WIDTH - 36) / 3;
@@ -84,6 +88,7 @@ const LEADERBOARD = [
 export default function ExploreScreen() {
   const {
     currentUser,
+    token,
     allUsers,
     posts,
     marketItems,
@@ -127,9 +132,78 @@ export default function ExploreScreen() {
   const [activeRoom, setActiveRoom] = useState<AudioRoom | null>(null);
   const [micOn, setMicOn] = useState(false);
   const [handRaised, setHandRaised] = useState(false);
+  const [roomRecSec, setRoomRecSec] = useState(0);
+  const [roomVoiceClips, setRoomVoiceClips] = useState<
+    { id: string; user: string; audioUri: string; durationSec: number; time: string }[]
+  >([]);
+  const roomRecRef = useRef<Audio.Recording | null>(null);
+  const roomTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [newRoomOpen, setNewRoomOpen] = useState(false);
   const [roomTitle, setRoomTitle] = useState("");
   const [roomTopic, setRoomTopic] = useState("");
+
+  useEffect(() => {
+    return () => {
+      if (roomTimerRef.current) clearInterval(roomTimerRef.current);
+      if (roomRecRef.current) roomRecRef.current.stopAndUnloadAsync().catch(() => {});
+    };
+  }, []);
+
+  async function handleToggleRoomMic() {
+    if (!activeRoom) return;
+    if (!micOn) {
+      try {
+        const perm = await Audio.requestPermissionsAsync();
+        if (!perm.granted) {
+          Alert.alert("صلاحية الميكروفون", "يرجى منح صلاحية الميكروفون للتحدث بصوتك الحقيقي في الغرفة.");
+          return;
+        }
+        await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+        const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+        roomRecRef.current = recording;
+        setMicOn(true);
+        setRoomRecSec(1);
+        roomTimerRef.current = setInterval(() => setRoomRecSec((s) => s + 1), 1000);
+      } catch {
+        Alert.alert("تنبيه", "تعذر تشغيل الميكروفون — تأكد من تثبيت إصدار v2.0.0.");
+      }
+    } else {
+      if (roomTimerRef.current) clearInterval(roomTimerRef.current);
+      const rec = roomRecRef.current;
+      roomRecRef.current = null;
+      const dur = Math.max(1, roomRecSec);
+      setMicOn(false);
+      setRoomRecSec(0);
+      if (rec) {
+        try {
+          await rec.stopAndUnloadAsync();
+          const uri = rec.getURI();
+          await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true });
+          if (uri) {
+            let payload = uri;
+            try {
+              const b64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+              payload = `data:audio/m4a;base64,${b64}`;
+            } catch {
+              // keep local uri
+            }
+            setRoomVoiceClips((prev) => [
+              { id: `rv_${Date.now()}`, user: currentUser?.name || "أنت", audioUri: payload, durationSec: dur, time: "الآن" },
+              ...prev,
+            ]);
+            if (token && !activeRoom.id.startsWith("ar_")) {
+              apiFetch(`/api/rooms/${activeRoom.id}/messages`, token, {
+                method: "POST",
+                body: JSON.stringify({ audioUrl: payload, durationSec: dur }),
+              }).catch(() => {});
+            }
+          }
+        } catch {
+          // ignore
+        }
+      }
+    }
+  }
 
   const [addingProduct, setAddingProduct] = useState(false);
   const [pTitle, setPTitle] = useState("");
@@ -833,22 +907,51 @@ export default function ExploreScreen() {
                 )}
               </View>
 
-              <View style={{ flexDirection: "row-reverse", gap: 10, marginTop: 18 }}>
+              {/* Real Voice Clips Stream inside Audio Room */}
+              {roomVoiceClips.length > 0 && (
+                <ScrollView style={{ maxHeight: 150, marginTop: 12 }} contentContainerStyle={{ gap: 8 }}>
+                  {roomVoiceClips.map((clip) => (
+                    <View
+                      key={clip.id}
+                      style={{
+                        backgroundColor: theme.surface,
+                        borderRadius: 14,
+                        paddingHorizontal: 12,
+                        paddingVertical: 6,
+                        borderWidth: 1,
+                        borderColor: theme.border,
+                      }}
+                    >
+                      <Text style={{ color: theme.primary, fontSize: 11, fontWeight: "800", textAlign: "right" }}>
+                        🎙️ {clip.user} · {clip.time}
+                      </Text>
+                      <VoiceMessagePlayer
+                        uri={clip.audioUri}
+                        durationSec={clip.durationSec}
+                        accentColor={theme.primary}
+                        textColor={theme.text}
+                      />
+                    </View>
+                  ))}
+                </ScrollView>
+              )}
+
+              <View style={{ flexDirection: "row-reverse", gap: 10, marginTop: 16 }}>
                 <TouchableOpacity
-                  style={[styles.sellBtn, { flex: 1, marginBottom: 0, backgroundColor: micOn ? theme.success : theme.surface2 }]}
-                  onPress={() => setMicOn((v) => !v)}
+                  style={[styles.sellBtn, { flex: 1, marginBottom: 0, backgroundColor: micOn ? theme.danger : theme.success }]}
+                  onPress={handleToggleRoomMic}
                 >
-                  <Ionicons name={micOn ? "mic" : "mic-off"} size={18} color={micOn ? "#fff" : theme.text} />
-                  <Text style={{ color: micOn ? "#fff" : theme.text, fontWeight: "800" }}>
-                    {micOn ? "الميكروفون مفتوح" : "كتم الصوت"}
+                  <Ionicons name={micOn ? "stop" : "mic"} size={18} color="#fff" />
+                  <Text style={{ color: "#fff", fontWeight: "900", fontSize: 12.5 }}>
+                    {micOn ? `إرسال صوتك (0:${String(roomRecSec).padStart(2, "0")})` : "🎙️ اضغط للتحدث الآن"}
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.sellBtn, { flex: 1, marginBottom: 0, backgroundColor: handRaised ? theme.primary : theme.surface2 }]}
+                  style={[styles.sellBtn, { flex: 0.75, marginBottom: 0, backgroundColor: handRaised ? theme.primary : theme.surface2 }]}
                   onPress={() => setHandRaised((v) => !v)}
                 >
-                  <Text style={{ color: handRaised ? theme.btnText : theme.text, fontWeight: "800" }}>
-                    {handRaised ? "✋ يدك مرفوعة" : "✋ اطلب الكلمة"}
+                  <Text style={{ color: handRaised ? theme.btnText : theme.text, fontWeight: "800", fontSize: 12 }}>
+                    {handRaised ? "✋ مرفوعة" : "✋ طلب كلمة"}
                   </Text>
                 </TouchableOpacity>
               </View>

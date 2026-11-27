@@ -1,0 +1,30 @@
+name: SHAHINAZ Build Android APK (EAS)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    name: Build SHAHINAZ Android APK (v2.0.0 Native)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Expo and EAS CLI
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: npm ci || npm install
+
+      - name: Trigger EAS Android APK Build (preview)
+        run: eas build --platform android --profile preview --non-interactive --no-wait

@@ -12,11 +12,15 @@ import {
   View,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
+import * as FileSystem from "expo-file-system";
+import { Audio } from "expo-av";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useApp } from "../store/AppContext";
 import type { NoteItem } from "../types";
 import AuroraBackground from "../components/AuroraBackground";
+import VoiceMessagePlayer from "../components/VoiceMessagePlayer";
+import FriendsModal from "../components/FriendsModal";
 
 const QUICK_REPLIES = [
   "مرحباً! 👋",
@@ -35,6 +39,8 @@ export default function MessagesScreen() {
     markChatRead,
     startChatWithUser,
     sendMessage,
+    syncChatWithPeer,
+    refreshThreads,
     setMyNote,
   } = useApp();
 
@@ -42,23 +48,37 @@ export default function MessagesScreen() {
   const [text, setText] = useState("");
   const [noteModal, setNoteModal] = useState(false);
   const [noteDraft, setNoteDraft] = useState("");
-  const [newChatModal, setNewChatModal] = useState(false);
+  const [friendsModalOpen, setFriendsModalOpen] = useState(false);
   const [replyNote, setReplyNote] = useState<NoteItem | null>(null);
   const [replyText, setReplyText] = useState("");
   const [recording, setRecording] = useState(false);
   const [recSeconds, setRecSeconds] = useState(0);
   const recTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recordingObjRef = useRef<Audio.Recording | null>(null);
 
   const activeChat = chats.find((c) => c.id === activeChatId);
   const myNote = notes.find((n) => n.userId === currentUser?.id);
   const friendsNotes = notes.filter((n) => n.userId !== currentUser?.id);
-  const otherUsers = allUsers.filter((u) => u.id !== currentUser?.id);
 
   useEffect(() => {
+    refreshThreads();
     return () => {
       if (recTimerRef.current) clearInterval(recTimerRef.current);
+      if (recordingObjRef.current) {
+        recordingObjRef.current.stopAndUnloadAsync().catch(() => {});
+      }
     };
   }, []);
+
+  // Poll real Neon online messages every 3.5s while a chat is open
+  useEffect(() => {
+    if (!activeChat) return;
+    syncChatWithPeer(activeChat.id, activeChat.user.id);
+    const interval = setInterval(() => {
+      syncChatWithPeer(activeChat.id, activeChat.user.id);
+    }, 3500);
+    return () => clearInterval(interval);
+  }, [activeChat?.id, activeChat?.user.id]);
 
   function openChat(chatId: string) {
     markChatRead(chatId);
@@ -74,28 +94,73 @@ export default function MessagesScreen() {
     }
     const res = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.8,
+      quality: 0.65,
     });
     if (!res.canceled && res.assets[0]?.uri) {
-      sendMessage(activeChat.id, "", res.assets[0].uri);
+      let uriToSend = res.assets[0].uri;
+      try {
+        const b64 = await FileSystem.readAsStringAsync(uriToSend, { encoding: FileSystem.EncodingType.Base64 });
+        uriToSend = `data:image/jpeg;base64,${b64}`;
+      } catch {
+        // fallback local uri
+      }
+      sendMessage(activeChat.id, "", uriToSend);
     }
   }
 
-  function handleToggleRecordVoice() {
+  // 100% REAL MICROPHONE VOICE RECORDING VIA EXPO-AV
+  async function handleToggleRecordVoice() {
     if (!activeChat) return;
     if (!recording) {
-      setRecording(true);
-      setRecSeconds(1);
-      recTimerRef.current = setInterval(() => {
-        setRecSeconds((s) => s + 1);
-      }, 1000);
+      try {
+        const perm = await Audio.requestPermissionsAsync();
+        if (!perm.granted) {
+          Alert.alert("صلاحية الميكروفون مطلوبة", "يرجى السماح للتطبيق باستخدام الميكروفون لتسجيل الرسائل الصوتية.");
+          return;
+        }
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: true,
+          playsInSilentModeIOS: true,
+        });
+        const { recording: rec } = await Audio.Recording.createAsync(
+          Audio.RecordingOptionsPresets.HIGH_QUALITY
+        );
+        recordingObjRef.current = rec;
+        setRecording(true);
+        setRecSeconds(1);
+        recTimerRef.current = setInterval(() => {
+          setRecSeconds((s) => s + 1);
+        }, 1000);
+      } catch {
+        Alert.alert("تعذر التسجيل", "تأكد من تثبيت إصدار SHAHINAZ v2.0.0 ومنح صلاحية الميكروفون.");
+      }
     } else {
-      if (recTimerRef.current) clearInterval(recTimerRef.current);
-      const mins = Math.floor(recSeconds / 60);
-      const secs = String(recSeconds % 60).padStart(2, "0");
-      sendMessage(activeChat.id, `🎙️ رسالة صوتية (${mins}:${secs})`);
-      setRecording(false);
-      setRecSeconds(0);
+      try {
+        if (recTimerRef.current) clearInterval(recTimerRef.current);
+        const rec = recordingObjRef.current;
+        recordingObjRef.current = null;
+        const dur = Math.max(1, recSeconds);
+        setRecording(false);
+        setRecSeconds(0);
+        if (rec) {
+          await rec.stopAndUnloadAsync();
+          const uri = rec.getURI();
+          await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true });
+          if (uri) {
+            let audioPayload = uri;
+            try {
+              const b64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+              audioPayload = `data:audio/m4a;base64,${b64}`;
+            } catch {
+              // keep local file uri
+            }
+            sendMessage(activeChat.id, "", undefined, audioPayload, dur);
+          }
+        }
+      } catch {
+        setRecording(false);
+        setRecSeconds(0);
+      }
     }
   }
 
@@ -126,6 +191,10 @@ export default function MessagesScreen() {
           <TouchableOpacity
             onPress={() => {
               if (recTimerRef.current) clearInterval(recTimerRef.current);
+              if (recordingObjRef.current) {
+                recordingObjRef.current.stopAndUnloadAsync().catch(() => {});
+                recordingObjRef.current = null;
+              }
               setRecording(false);
               setActiveChatId(null);
             }}
@@ -149,7 +218,7 @@ export default function MessagesScreen() {
                 <Text style={[styles.chatName, { color: theme.text }]}>{activeChat.user.name}</Text>
                 {activeChat.user.verified && <Ionicons name="checkmark-circle" size={14} color={theme.verified} />}
               </View>
-              <Text style={{ color: theme.success, fontSize: 11, fontWeight: "700" }}>متصل الآن ●</Text>
+              <Text style={{ color: theme.success, fontSize: 11, fontWeight: "700" }}>متصل أونلاين ●</Text>
             </View>
           </View>
         </View>
@@ -176,6 +245,14 @@ export default function MessagesScreen() {
                 {!!item.imageUri && (
                   <Image source={{ uri: item.imageUri }} style={styles.chatImgBubble} resizeMode="cover" />
                 )}
+                {!!item.audioUri && (
+                  <VoiceMessagePlayer
+                    uri={item.audioUri}
+                    durationSec={item.durationSec}
+                    accentColor="#ffffff"
+                    textColor={theme.btnText}
+                  />
+                )}
                 {!!item.text && (
                   <Text style={{ color: theme.btnText, fontSize: 14, fontWeight: "700", lineHeight: 20, textAlign: "right" }}>
                     {item.text}
@@ -190,6 +267,14 @@ export default function MessagesScreen() {
                 {!!item.imageUri && (
                   <Image source={{ uri: item.imageUri }} style={styles.chatImgBubble} resizeMode="cover" />
                 )}
+                {!!item.audioUri && (
+                  <VoiceMessagePlayer
+                    uri={item.audioUri}
+                    durationSec={item.durationSec}
+                    accentColor={theme.primary}
+                    textColor={theme.text}
+                  />
+                )}
                 {!!item.text && (
                   <Text style={{ color: theme.text, fontSize: 14, lineHeight: 20, textAlign: "right" }}>{item.text}</Text>
                 )}
@@ -201,7 +286,6 @@ export default function MessagesScreen() {
           }
         />
 
-        {/* Smart Algerian Quick-Reply Chips */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -223,7 +307,7 @@ export default function MessagesScreen() {
           <View style={[styles.recBar, { backgroundColor: "rgba(239,68,68,0.16)", borderColor: theme.danger }]}>
             <View style={[styles.recDot, { backgroundColor: theme.danger }]} />
             <Text style={{ color: theme.danger, fontSize: 12, fontWeight: "800" }}>
-              جاري التسجيل · 0:{String(recSeconds).padStart(2, "0")} — اضغط إيقاف للإرسال
+              🎙️ جاري تسجيل صوت حقيقي · 0:{String(recSeconds).padStart(2, "0")} — اضغط إيقاف للإرسال
             </Text>
           </View>
         )}
@@ -233,14 +317,14 @@ export default function MessagesScreen() {
             style={[styles.circleBtn, { backgroundColor: recording ? theme.danger : theme.surface2 }]}
             onPress={handleToggleRecordVoice}
           >
-            <Ionicons name={recording ? "stop" : "mic-outline"} size={19} color={recording ? "#fff" : theme.primary} />
+            <Ionicons name={recording ? "stop" : "mic"} size={19} color={recording ? "#fff" : theme.primary} />
           </TouchableOpacity>
           <TouchableOpacity style={[styles.circleBtn, { backgroundColor: theme.surface2 }]} onPress={handlePickChatImage}>
             <Ionicons name="image-outline" size={19} color={theme.text} />
           </TouchableOpacity>
           <TextInput
             style={[styles.input, { color: theme.text }]}
-            placeholder="اكتب رسالتك هنا..."
+            placeholder="اكتب رسالة أو سجّل فويس..."
             placeholderTextColor={theme.muted}
             value={text}
             onChangeText={setText}
@@ -272,12 +356,13 @@ export default function MessagesScreen() {
       <AuroraBackground theme={theme} height={240} />
       <View style={styles.inboxHead}>
         <View style={{ alignItems: "flex-end" }}>
-          <Text style={[styles.title, { color: theme.text }]}>المحادثات</Text>
-          <Text style={{ color: theme.muted, fontSize: 11.5 }}>تواصل فوري وملاحظات 24 ساعة</Text>
+          <Text style={[styles.title, { color: theme.text }]}>المحادثات والأصدقاء</Text>
+          <Text style={{ color: theme.muted, fontSize: 11.5 }}>دردشة أونلاين · فويس حقيقي · طلبات صداقة</Text>
         </View>
-        <TouchableOpacity onPress={() => setNewChatModal(true)} activeOpacity={0.85}>
-          <LinearGradient colors={theme.btnGrad} style={styles.newChatFab}>
-            <Ionicons name="create-outline" size={19} color={theme.btnText} />
+        <TouchableOpacity onPress={() => setFriendsModalOpen(true)} activeOpacity={0.88}>
+          <LinearGradient colors={theme.btnGrad} style={styles.addFriendBtn}>
+            <Ionicons name="person-add" size={16} color={theme.btnText} />
+            <Text style={{ color: theme.btnText, fontSize: 12, fontWeight: "900" }}>إضافة صديق</Text>
           </LinearGradient>
         </TouchableOpacity>
       </View>
@@ -450,44 +535,15 @@ export default function MessagesScreen() {
         </View>
       </Modal>
 
-      {/* Start New Chat Modal */}
-      <Modal visible={newChatModal} transparent animationType="slide" onRequestClose={() => setNewChatModal(false)}>
-        <View style={styles.modalBackdrop}>
-          <View style={[styles.modalBox, { backgroundColor: theme.bgAlt, borderColor: theme.borderGlow }]}>
-            <Text style={[styles.modalTitle, { color: theme.text }]}>✉️ محادثة جديدة</Text>
-            <ScrollView style={{ maxHeight: 300 }}>
-              {otherUsers.map((u) => (
-                <TouchableOpacity
-                  key={u.id}
-                  style={[styles.newChatUserRow, { borderBottomColor: theme.border }]}
-                  onPress={() => {
-                    const cid = startChatWithUser(u);
-                    setNewChatModal(false);
-                    setActiveChatId(cid);
-                  }}
-                >
-                  {u.avatarUri ? (
-                    <Image source={{ uri: u.avatarUri }} style={{ width: 42, height: 42, borderRadius: 15 }} />
-                  ) : (
-                    <Text style={{ fontSize: 20 }}>{u.avatarEmoji}</Text>
-                  )}
-                  <View style={{ flex: 1, alignItems: "flex-end" }}>
-                    <Text style={{ color: theme.text, fontWeight: "800", fontSize: 14 }}>{u.name}</Text>
-                    <Text style={{ color: theme.muted, fontSize: 11.5 }}>@{u.username}</Text>
-                  </View>
-                  <Ionicons name="chatbubble-outline" size={18} color={theme.primary} />
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-            <TouchableOpacity
-              style={[styles.modalCancelBtn, { backgroundColor: theme.surface2, marginTop: 12, paddingVertical: 12, alignItems: "center" }]}
-              onPress={() => setNewChatModal(false)}
-            >
-              <Text style={{ color: theme.text, fontWeight: "800" }}>إغلاق</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+      {/* Real Friends & Add Friend Directory Modal */}
+      <FriendsModal
+        visible={friendsModalOpen}
+        onClose={() => setFriendsModalOpen(false)}
+        onStartChat={(user) => {
+          const cid = startChatWithUser(user);
+          setActiveChatId(cid);
+        }}
+      />
     </View>
   );
 }
@@ -501,13 +557,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
   },
-  title: { fontSize: 23, fontWeight: "900" },
-  newChatFab: {
-    width: 40,
-    height: 40,
-    borderRadius: 14,
+  title: { fontSize: 21, fontWeight: "900" },
+  addFriendBtn: {
+    flexDirection: "row-reverse",
     alignItems: "center",
-    justifyContent: "center",
+    gap: 6,
+    paddingHorizontal: 13,
+    paddingVertical: 9,
+    borderRadius: 14,
   },
   notesWrap: { paddingVertical: 10, marginBottom: 6 },
   notesRow: { paddingHorizontal: 14, gap: 14 },
@@ -532,13 +589,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   noteAvatar: { width: 61, height: 61, borderRadius: 21 },
-  noteAvatarFallback: {
-    width: 61,
-    height: 61,
-    borderRadius: 21,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  noteAvatarFallback: { width: 61, height: 61, borderRadius: 21, alignItems: "center", justifyContent: "center" },
   noteName: { fontSize: 11, fontWeight: "700", marginTop: 6 },
   threadCard: {
     flexDirection: "row-reverse",
@@ -551,13 +602,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   threadAvatar: { width: 52, height: 52, borderRadius: 18 },
-  threadAvatarFallback: {
-    width: 52,
-    height: 52,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  threadAvatarFallback: { width: 52, height: 52, borderRadius: 18, alignItems: "center", justifyContent: "center" },
   onlineDot: {
     position: "absolute",
     bottom: -1,
@@ -584,18 +629,11 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
     borderBottomWidth: 1,
   },
-  iconCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: 14,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  iconCircle: { width: 38, height: 38, borderRadius: 14, borderWidth: 1, alignItems: "center", justifyContent: "center" },
   chatAvatar: { width: 40, height: 40, borderRadius: 15, borderWidth: 1.5 },
   chatName: { fontWeight: "900", fontSize: 15 },
   bubble: {
-    maxWidth: "80%",
+    maxWidth: "82%",
     borderRadius: 20,
     paddingHorizontal: 14,
     paddingVertical: 10,
@@ -604,12 +642,7 @@ const styles = StyleSheet.create({
   bubbleMe: { alignSelf: "flex-end", borderBottomRightRadius: 6 },
   bubbleOther: { alignSelf: "flex-start", borderBottomLeftRadius: 6, borderWidth: 1 },
   chatImgBubble: { width: 210, height: 170, borderRadius: 14, marginBottom: 6 },
-  quickChip: {
-    borderRadius: 999,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    justifyContent: "center",
-  },
+  quickChip: { borderRadius: 999, borderWidth: 1, paddingHorizontal: 12, justifyContent: "center" },
   recBar: {
     flexDirection: "row-reverse",
     alignItems: "center",
@@ -633,21 +666,9 @@ const styles = StyleSheet.create({
     borderRadius: 26,
     borderWidth: 1,
   },
-  circleBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  circleBtn: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
   input: { flex: 1, fontSize: 14, textAlign: "right", paddingVertical: 6 },
-  sendBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  sendBtn: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center" },
   modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.82)", justifyContent: "center", padding: 20 },
   modalBox: { borderRadius: 24, padding: 18, borderWidth: 1 },
   modalTitle: { fontSize: 16, fontWeight: "900", textAlign: "right", marginBottom: 12 },
@@ -655,11 +676,4 @@ const styles = StyleSheet.create({
   modalInput: { borderRadius: 14, padding: 12, textAlign: "right", marginBottom: 12, borderWidth: 1 },
   modalPrimaryBtn: { borderRadius: 13, padding: 12, alignItems: "center" },
   modalCancelBtn: { borderRadius: 13, paddingHorizontal: 16, justifyContent: "center" },
-  newChatUserRow: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: 10,
-    paddingVertical: 10,
-    borderBottomWidth: 0.5,
-  },
 });

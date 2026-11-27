@@ -1,6 +1,8 @@
 import React, { useState } from "react";
-import { Alert, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import * as ImagePicker from "expo-image-picker";
+import * as FileSystem from "expo-file-system";
+import { ResizeMode, Video } from "expo-av";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useApp } from "../store/AppContext";
@@ -29,9 +31,11 @@ export default function CreatePostScreen({ onDone }: { onDone: () => void }) {
   const [content, setContent] = useState("");
   const [location, setLocation] = useState("");
   const [imageUri, setImageUri] = useState<string | undefined>(undefined);
+  const [videoUri, setVideoUri] = useState<string | undefined>(undefined);
   const [bgColor, setBgColor] = useState("");
   const [showPoll, setShowPoll] = useState(false);
   const [showAI, setShowAI] = useState(false);
+  const [publishing, setPublishing] = useState(false);
   const [opt1, setOpt1] = useState("");
   const [opt2, setOpt2] = useState("");
   const [opt3, setOpt3] = useState("");
@@ -46,10 +50,29 @@ export default function CreatePostScreen({ onDone }: { onDone: () => void }) {
     }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.85,
+      quality: 0.72,
     });
     if (!result.canceled && result.assets[0]?.uri) {
       setImageUri(result.assets[0].uri);
+      setVideoUri(undefined);
+      setBgColor("");
+    }
+  }
+
+  async function pickVideo() {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert("الصلاحية مطلوبة", "يرجى السماح بالوصول إلى الفيديوهات لاختيار فيديو.");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+      videoMaxDuration: 30,
+      quality: 0.6,
+    });
+    if (!result.canceled && result.assets[0]?.uri) {
+      setVideoUri(result.assets[0].uri);
+      setImageUri(undefined);
       setBgColor("");
     }
   }
@@ -59,7 +82,7 @@ export default function CreatePostScreen({ onDone }: { onDone: () => void }) {
     setShowAI(false);
   }
 
-  function handlePublish() {
+  async function handlePublish() {
     if (maintenanceMode) {
       Alert.alert("وضع الصيانة نشط ⚡", "النشر متوقف مؤقتاً من طرف الإدارة لإجراء تحديثات.");
       return;
@@ -69,8 +92,8 @@ export default function CreatePostScreen({ onDone }: { onDone: () => void }) {
       Alert.alert("الصلاحيات", "صلاحية النشر غير مفعّلة لرتبتك الحالية من طرف الإدارة.");
       return;
     }
-    if (!content.trim() && !imageUri) {
-      Alert.alert("تنبيه", "اكتب شيئاً أو اختر صورة للنشر.");
+    if (!content.trim() && !imageUri && !videoUri) {
+      Alert.alert("تنبيه", "اكتب شيئاً أو اختر صورة أو فيديو للنشر.");
       return;
     }
     const foundBanned = bannedWords.find((w) => content.toLowerCase().includes(w.toLowerCase()));
@@ -78,27 +101,72 @@ export default function CreatePostScreen({ onDone }: { onDone: () => void }) {
       Alert.alert("فلتر الأمان التلقائي 🛡️", "يحتوي منشورك على كلمة محظورة من إدارة التطبيق. يرجى تعديل النص.");
       return;
     }
-    createPost(content, imageUri, location, bgColor || undefined, showPoll ? [opt1, opt2, opt3] : undefined);
-    setContent("");
-    setLocation("");
-    setImageUri(undefined);
-    setBgColor("");
-    setShowPoll(false);
-    setOpt1("");
-    setOpt2("");
-    setOpt3("");
-    onDone();
+
+    setPublishing(true);
+    try {
+      let uploadImageUri = imageUri;
+      let uploadVideoUri = videoUri;
+
+      if (imageUri && imageUri.startsWith("file://")) {
+        try {
+          const info = await FileSystem.getInfoAsync(imageUri);
+          if (info.exists && (info.size || 0) < 4 * 1024 * 1024) {
+            const b64 = await FileSystem.readAsStringAsync(imageUri, { encoding: FileSystem.EncodingType.Base64 });
+            uploadImageUri = `data:image/jpeg;base64,${b64}`;
+          }
+        } catch {
+          // keep local URI
+        }
+      }
+
+      if (videoUri && videoUri.startsWith("file://")) {
+        try {
+          const info = await FileSystem.getInfoAsync(videoUri);
+          if (info.exists && (info.size || 0) < 12 * 1024 * 1024) {
+            const b64 = await FileSystem.readAsStringAsync(videoUri, { encoding: FileSystem.EncodingType.Base64 });
+            uploadVideoUri = `data:video/mp4;base64,${b64}`;
+          }
+        } catch {
+          // keep local URI
+        }
+      }
+
+      createPost(
+        content,
+        uploadImageUri,
+        location,
+        bgColor || undefined,
+        showPoll ? [opt1, opt2, opt3] : undefined,
+        uploadVideoUri
+      );
+      setContent("");
+      setLocation("");
+      setImageUri(undefined);
+      setVideoUri(undefined);
+      setBgColor("");
+      setShowPoll(false);
+      setOpt1("");
+      setOpt2("");
+      setOpt3("");
+      onDone();
+    } finally {
+      setPublishing(false);
+    }
   }
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg }}>
       <AuroraBackground theme={theme} height={240} />
-      <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 32 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-        {/* Studio Header */}
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={{ paddingBottom: 32 }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.headRow}>
           <View style={{ alignItems: "flex-end" }}>
             <Text style={[styles.title, { color: theme.text }]}>استوديو الإبداع</Text>
-            <Text style={{ color: theme.muted, fontSize: 11.5 }}>اصنع منشوراً فاخراً يليق بجمهورك</Text>
+            <Text style={{ color: theme.muted, fontSize: 11.5 }}>انشر صوراً، فيديوهات حقيقية، أو استطلاعات</Text>
           </View>
           <TouchableOpacity onPress={() => setShowAI((v) => !v)} activeOpacity={0.85}>
             <LinearGradient colors={theme.btnGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.aiPill}>
@@ -116,7 +184,6 @@ export default function CreatePostScreen({ onDone }: { onDone: () => void }) {
           </View>
         )}
 
-        {/* SHAHINAZ AI Smart Caption Assistant */}
         {showAI && (
           <View style={[styles.aiBox, { backgroundColor: theme.glass, borderColor: theme.borderGlow }]}>
             <Text style={[styles.aiTitle, { color: theme.primary }]}>✦ اختر قالباً ليجهّزه الذكاء الاصطناعي فوراً:</Text>
@@ -134,7 +201,6 @@ export default function CreatePostScreen({ onDone }: { onDone: () => void }) {
           </View>
         )}
 
-        {/* Composer Canvas Card */}
         <LinearGradient
           colors={bgColor ? activeSwatch.colors : [theme.surface, theme.surface]}
           start={{ x: 0, y: 0 }}
@@ -151,17 +217,16 @@ export default function CreatePostScreen({ onDone }: { onDone: () => void }) {
               bgColor ? { textAlign: "center", fontSize: 20, fontWeight: "900", minHeight: 190 } : null,
             ]}
             multiline
-            placeholder="شارك فكرتك، منتجك، أو لحظتك المميزة..."
+            placeholder="شارك فكرتك، فيديوهاتك، أو منتجك المميز..."
             placeholderTextColor={bgColor ? "rgba(255,255,255,0.72)" : theme.muted}
             value={content}
             onChangeText={setContent}
           />
         </LinearGradient>
 
-        {/* Gradient Background Swatches */}
-        {!imageUri && (
+        {!imageUri && !videoUri && (
           <View style={[styles.swatchCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-            <Text style={{ color: theme.muted, fontSize: 12, fontWeight: "700" }}>خلفية فاخرة:</Text>
+            <Text style={{ color: theme.muted, fontSize: 12, fontWeight: "700" }}>خلفية:</Text>
             <View style={{ flexDirection: "row-reverse", gap: 9, flexWrap: "wrap" }}>
               {BG_SWATCHES.map((s) => {
                 const active = bgColor === s.id;
@@ -169,10 +234,7 @@ export default function CreatePostScreen({ onDone }: { onDone: () => void }) {
                   <TouchableOpacity
                     key={s.id || "none"}
                     onPress={() => setBgColor(s.id)}
-                    style={[
-                      styles.swatchRing,
-                      { borderColor: active ? theme.primary : "transparent" },
-                    ]}
+                    style={[styles.swatchRing, { borderColor: active ? theme.primary : "transparent" }]}
                   >
                     <LinearGradient colors={s.colors} style={styles.swatchInner}>
                       {s.label && <Text style={{ color: theme.muted, fontSize: 9.5, fontWeight: "800" }}>{s.label}</Text>}
@@ -184,26 +246,30 @@ export default function CreatePostScreen({ onDone }: { onDone: () => void }) {
           </View>
         )}
 
-        {/* Quick Tools Row */}
-        <View style={{ flexDirection: "row-reverse", gap: 10, marginBottom: 12 }}>
-          <TouchableOpacity
-            style={[styles.toolBtn, { backgroundColor: theme.surface, borderColor: showPoll ? theme.primary : theme.border }]}
-            onPress={() => setShowPoll((v) => !v)}
-          >
-            <Ionicons name="bar-chart-outline" size={17} color={showPoll ? theme.primary : theme.text} />
-            <Text style={{ color: showPoll ? theme.primary : theme.text, fontWeight: "700", fontSize: 12.5 }}>
-              {showPoll ? "إلغاء الاستطلاع" : "إضافة استطلاع"}
-            </Text>
-          </TouchableOpacity>
-
+        {/* Real Photo + Real Video + Poll Tools Row */}
+        <View style={{ flexDirection: "row-reverse", gap: 8, marginBottom: 12 }}>
           <TouchableOpacity
             style={[styles.toolBtn, { backgroundColor: theme.surface, borderColor: imageUri ? theme.primary : theme.border }]}
             onPress={pickImage}
           >
             <Ionicons name="images-outline" size={17} color={imageUri ? theme.primary : theme.text} />
-            <Text style={{ color: imageUri ? theme.primary : theme.text, fontWeight: "700", fontSize: 12.5 }}>
-              {imageUri ? "تغيير الصورة" : "إرفاق صورة"}
-            </Text>
+            <Text style={{ color: imageUri ? theme.primary : theme.text, fontWeight: "800", fontSize: 12 }}>صورة</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.toolBtn, { backgroundColor: theme.surface, borderColor: videoUri ? theme.primary : theme.borderGlow }]}
+            onPress={pickVideo}
+          >
+            <Ionicons name="videocam-outline" size={18} color={videoUri ? theme.primary : theme.primary} />
+            <Text style={{ color: theme.primary, fontWeight: "900", fontSize: 12 }}>🎬 فيديو</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.toolBtn, { backgroundColor: theme.surface, borderColor: showPoll ? theme.primary : theme.border }]}
+            onPress={() => setShowPoll((v) => !v)}
+          >
+            <Ionicons name="bar-chart-outline" size={16} color={showPoll ? theme.primary : theme.text} />
+            <Text style={{ color: showPoll ? theme.primary : theme.text, fontWeight: "800", fontSize: 12 }}>استطلاع</Text>
           </TouchableOpacity>
         </View>
 
@@ -238,10 +304,33 @@ export default function CreatePostScreen({ onDone }: { onDone: () => void }) {
           </View>
         )}
 
-        <TouchableOpacity activeOpacity={0.9} onPress={handlePublish} style={{ marginTop: 6 }}>
+        {videoUri && (
+          <View style={styles.previewWrap}>
+            <Video
+              source={{ uri: videoUri }}
+              style={styles.preview}
+              useNativeControls
+              resizeMode={ResizeMode.COVER}
+              isLooping
+            />
+            <TouchableOpacity style={styles.removeImgBtn} onPress={() => setVideoUri(undefined)}>
+              <Ionicons name="close" size={18} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        )}
+
+        <TouchableOpacity activeOpacity={0.9} onPress={handlePublish} disabled={publishing} style={{ marginTop: 6 }}>
           <LinearGradient colors={theme.btnGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.publishBtn}>
-            <Ionicons name="paper-plane" size={18} color={theme.btnText} />
-            <Text style={{ color: theme.btnText, fontSize: 15, fontWeight: "900" }}>نشر الآن على SHAHINAZ</Text>
+            {publishing ? (
+              <ActivityIndicator color={theme.btnText} />
+            ) : (
+              <>
+                <Ionicons name="paper-plane" size={18} color={theme.btnText} />
+                <Text style={{ color: theme.btnText, fontSize: 15, fontWeight: "900" }}>
+                  {videoUri ? "رفع ونشر الفيديو الآن 🎬" : "نشر الآن على SHAHINAZ"}
+                </Text>
+              </>
+            )}
           </LinearGradient>
         </TouchableOpacity>
       </ScrollView>
@@ -271,11 +360,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: 16,
     marginBottom: 12,
-    minHeight: 160,
+    minHeight: 150,
     justifyContent: "center",
   },
   textarea: {
-    minHeight: 130,
+    minHeight: 120,
     fontSize: 15,
     lineHeight: 24,
     textAlign: "right",
@@ -291,26 +380,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     marginBottom: 12,
   },
-  swatchRing: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    padding: 2.5,
-    borderWidth: 2,
-  },
-  swatchInner: {
-    flex: 1,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  swatchRing: { width: 38, height: 38, borderRadius: 19, padding: 2.5, borderWidth: 2 },
+  swatchInner: { flex: 1, borderRadius: 16, alignItems: "center", justifyContent: "center" },
   toolBtn: {
     flex: 1,
     flexDirection: "row-reverse",
     alignItems: "center",
     justifyContent: "center",
-    gap: 7,
-    borderRadius: 16,
+    gap: 5,
+    borderRadius: 15,
     paddingVertical: 12,
     borderWidth: 1,
   },
@@ -332,8 +410,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     marginBottom: 14,
   },
-  previewWrap: { position: "relative", marginBottom: 14, borderRadius: 22, overflow: "hidden" },
-  preview: { width: "100%", height: 240, borderRadius: 22 },
+  previewWrap: { position: "relative", marginBottom: 14, borderRadius: 22, overflow: "hidden", backgroundColor: "#000" },
+  preview: { width: "100%", height: 260, borderRadius: 22 },
   removeImgBtn: {
     position: "absolute",
     top: 10,
