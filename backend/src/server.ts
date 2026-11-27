@@ -358,6 +358,15 @@ app.post("/api/upload/presign", requireAuth, async (req: AuthReq, res) => {
   res.json({ uploadUrl, publicUrl: `${process.env.R2_PUBLIC_URL}/${key}` });
 });
 
+// Clean JSON 404 Fallback (instead of default Express HTML)
+app.use((req: Request, res: Response) => {
+  res.status(404).json({
+    ok: false,
+    error: `المسار أو نوع الطلب غير مدعوم: ${req.method} ${req.path}`,
+    hint: "استخدم GET لقراءة البيانات (/api/health, /api/admin/overview, /api/app/version) و POST/DELETE للعمليات المخصصة.",
+  });
+});
+
 // Global Express Error Capture Middleware
 app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
   recordServerError(req.method, req.path, err.message || "Unhandled server error");

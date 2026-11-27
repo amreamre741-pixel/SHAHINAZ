@@ -159,8 +159,23 @@ export default function AdminScreen({ onClose }: { onClose: () => void }) {
         </View>
 
         {!!toastMsg && (
-          <View style={styles.toastBar}>
-            <Text style={styles.toastText}>{toastMsg}</Text>
+          <View
+            style={[
+              styles.toastBar,
+              (toastMsg.startsWith("⚠️") || toastMsg.startsWith("❌")) && {
+                backgroundColor: "rgba(239,68,68,0.18)",
+                borderColor: COLORS.danger,
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.toastText,
+                (toastMsg.startsWith("⚠️") || toastMsg.startsWith("❌")) && { color: "#fca5a5" },
+              ]}
+            >
+              {toastMsg}
+            </Text>
           </View>
         )}
       </LinearGradient>

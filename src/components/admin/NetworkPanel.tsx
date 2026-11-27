@@ -6,10 +6,17 @@ import { useApp } from "../../store/AppContext";
 import { API_BASE } from "../../services/api";
 import { devTelemetry, useDevTelemetry } from "../../services/devTelemetry";
 
-const PRESETS = [
-  { label: "Health", method: "GET", path: "/api/health" },
-  { label: "Neon Admin", method: "GET", path: "/api/admin/overview" },
-  { label: "Feed Posts", method: "GET", path: "/api/posts" },
+const PRESETS: { label: string; method: "GET" | "POST" | "DELETE"; path: string; body?: string }[] = [
+  { label: "GET · فحص السيرفر", method: "GET", path: "/api/health" },
+  { label: "GET · Neon Admin", method: "GET", path: "/api/admin/overview" },
+  { label: "GET · إصدار التطبيق", method: "GET", path: "/api/app/version" },
+  { label: "GET · المنشورات", method: "GET", path: "/api/posts" },
+  {
+    label: "POST · تحديث الإصدار",
+    method: "POST",
+    path: "/api/admin/app/version",
+    body: JSON.stringify({ latestVersion: "1.0.0", forceUpdate: false, releaseNotes: "تحديث SHAHINAZ OTA ⚡" }, null, 2),
+  },
 ];
 
 export default function NetworkPanel({ onToast }: { onToast: (msg: string) => void }) {
@@ -55,7 +62,7 @@ export default function NetworkPanel({ onToast }: { onToast: (msg: string) => vo
         error: res.ok ? undefined : `HTTP ${res.status}`,
       });
       setResp({ status: res.status, ms, body: formatted.slice(0, 2200) });
-      onToast(res.ok ? `✅ HTTP ${res.status} (${ms} ms)` : `⚠️ HTTP ${res.status} (${ms} ms)`);
+      onToast(res.ok ? `✅ HTTP ${res.status} (${ms} ms)` : `⚠️ HTTP ${res.status} (${ms} ms) — تحقق من نوع الطلب`);
     } catch (err) {
       const ms = Date.now() - start;
       const msg = err instanceof Error ? err.message : "Network error";
@@ -72,17 +79,23 @@ export default function NetworkPanel({ onToast }: { onToast: (msg: string) => vo
       {/* Built-in Postman API Playground */}
       <View style={styles.card}>
         <Text style={styles.cardTitle}>⚡ مختبر الـ API المباشر (Built-in Postman)</Text>
-        <Text style={styles.sub}>Base URL: {API_BASE}</Text>
+        <Text style={styles.sub}>
+          اختر أحد القوالب الجاهزة بالأسفل (GET للقراءة · POST للإرسال · DELETE للحذف):
+        </Text>
 
         {/* Quick Presets */}
         <View style={styles.rowWrap}>
           {PRESETS.map((p) => (
             <TouchableOpacity
-              key={p.path}
-              style={styles.presetChip}
+              key={`${p.method}_${p.path}`}
+              style={[
+                styles.presetChip,
+                method === p.method && path === p.path && { backgroundColor: COLORS.primary },
+              ]}
               onPress={() => {
-                setMethod(p.method as any);
+                setMethod(p.method);
                 setPath(p.path);
+                setBodyStr(p.body || "");
               }}
             >
               <Text style={styles.presetTxt}>{p.label}</Text>
@@ -114,7 +127,7 @@ export default function NetworkPanel({ onToast }: { onToast: (msg: string) => vo
 
         {method === "POST" && (
           <TextInput
-            style={[styles.input, { minHeight: 70, textAlignVertical: "top" }]}
+            style={[styles.input, { minHeight: 80, textAlignVertical: "top", fontFamily: "monospace", fontSize: 11.5 }]}
             placeholder='{"key": "value"}'
             placeholderTextColor={COLORS.muted}
             multiline
@@ -178,14 +191,14 @@ export default function NetworkPanel({ onToast }: { onToast: (msg: string) => vo
           networkLogs.map((n) => (
             <View key={n.id} style={styles.netRow}>
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flex: 1 }}>
                   <View style={[styles.statusBadge, { backgroundColor: n.ok ? "rgba(34,197,94,0.18)" : "rgba(239,68,68,0.2)" }]}>
                     <Text style={{ color: n.ok ? COLORS.success : COLORS.danger, fontSize: 10.5, fontWeight: "800" }}>
                       {n.status || "ERR"}
                     </Text>
                   </View>
                   <Text style={{ color: COLORS.primary, fontSize: 11, fontWeight: "800" }}>{n.method}</Text>
-                  <Text style={{ color: COLORS.text, fontSize: 11.5 }} numberOfLines={1}>
+                  <Text style={{ color: COLORS.text, fontSize: 11.5, flex: 1 }} numberOfLines={1}>
                     {n.path}
                   </Text>
                 </View>
@@ -213,7 +226,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   cardTitle: { color: COLORS.text, fontSize: 14.5, fontWeight: "800", textAlign: "right" },
-  sub: { color: COLORS.muted, fontSize: 11, textAlign: "right" },
+  sub: { color: COLORS.muted, fontSize: 11.5, textAlign: "right", lineHeight: 17 },
   rowWrap: { flexDirection: "row-reverse", flexWrap: "wrap", gap: 6 },
   presetChip: {
     backgroundColor: "rgba(168,85,247,0.16)",
@@ -223,7 +236,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
   },
-  presetTxt: { color: "#e9d5ff", fontSize: 11, fontWeight: "700" },
+  presetTxt: { color: "#fff", fontSize: 11, fontWeight: "700" },
   row: { flexDirection: "row", gap: 6 },
   methodBtn: {
     flex: 1,
