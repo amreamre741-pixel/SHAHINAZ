@@ -9,7 +9,10 @@ import {
   type ServerVersionInfo,
 } from "../services/otaUpdates";
 
+import { useApp } from "../store/AppContext";
+
 export default function UpdateBanner() {
+  const { theme } = useApp();
   const [otaReady, setOtaReady] = useState(false);
   const [storeUpdate, setStoreUpdate] = useState<ServerVersionInfo | null>(null);
   const [dismissed, setDismissed] = useState(false);
@@ -40,17 +43,24 @@ export default function UpdateBanner() {
 
   if (otaReady) {
     return (
-      <LinearGradient colors={["#6d28d9", "#db2777"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.banner}>
+      <LinearGradient
+        colors={theme.coverGrad}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={[styles.banner, { borderWidth: 1, borderColor: theme.borderGlow }]}
+      >
         <View style={styles.row}>
-          <Ionicons name="sparkles" size={18} color="#fde68a" />
+          <Ionicons name="sparkles" size={18} color={theme.primary} />
           <View style={{ flex: 1, alignItems: "flex-end" }}>
-            <Text style={styles.title}>يتوفر تحديث جديد لـ SHAHINAZ ⚡</Text>
-            <Text style={styles.sub}>تم تحميله تلقائياً — اضغط لتطبيقه في ثانية واحدة</Text>
+            <Text style={[styles.title, { color: theme.text }]}>يتوفر تحديث جديد لـ SHAHINAZ ⚡</Text>
+            <Text style={[styles.sub, { color: theme.muted }]}>تم تحميله تلقائياً — اضغط لتطبيقه في ثانية واحدة</Text>
           </View>
         </View>
         <View style={styles.actions}>
-          <TouchableOpacity style={styles.applyBtn} onPress={applyOtaUpdateNow}>
-            <Text style={styles.applyTxt}>تحديث الآن ⚡</Text>
+          <TouchableOpacity style={{ flex: 1 }} onPress={applyOtaUpdateNow}>
+            <LinearGradient colors={theme.btnGrad} style={styles.applyBtn}>
+              <Text style={[styles.applyTxt, { color: theme.btnText }]}>تحديث الآن ⚡</Text>
+            </LinearGradient>
           </TouchableOpacity>
           <TouchableOpacity style={styles.laterBtn} onPress={() => setDismissed(true)}>
             <Text style={styles.laterTxt}>لاحقاً</Text>

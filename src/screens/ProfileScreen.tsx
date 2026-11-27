@@ -16,19 +16,19 @@ import {
 import * as ImagePicker from "expo-image-picker";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { COLORS } from "../theme";
 import { useApp } from "../store/AppContext";
 import AdminScreen from "./AdminScreen";
 import DevVaultModal from "../components/DevVaultModal";
 import DailyStreakModal from "../components/DailyStreakModal";
+import ThemeStudioModal from "../components/ThemeStudioModal";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const GRID_SIZE = (SCREEN_WIDTH - 4) / 3;
+const GRID_SIZE = (SCREEN_WIDTH - 36) / 3;
 
 const ROLE_LABELS: Record<string, { label: string; color: string }> = {
-  ADMIN: { label: "👑 مطور", color: "#a855f7" },
-  MODERATOR: { label: "🛡️ مشرف", color: "#3897f0" },
-  VIP: { label: "⭐ VIP", color: "#f59e0b" },
+  ADMIN: { label: "👑 مطور", color: "#F5C65C" },
+  MODERATOR: { label: "🛡️ مشرف", color: "#38BDF8" },
+  VIP: { label: "⭐ VIP", color: "#FBBF24" },
 };
 
 export default function ProfileScreen() {
@@ -38,6 +38,7 @@ export default function ProfileScreen() {
     allUsers,
     blockedUserIds,
     adminPin,
+    theme,
     updateProfile,
     togglePrivateAccount,
     toggleLike,
@@ -53,6 +54,7 @@ export default function ProfileScreen() {
   const [devVaultOpen, setDevVaultOpen] = useState(false);
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
   const [streakOpen, setStreakOpen] = useState(false);
+  const [themeOpen, setThemeOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(currentUser?.name || "");
   const [editBio, setEditBio] = useState(currentUser?.bio || "");
@@ -126,127 +128,206 @@ export default function ProfileScreen() {
   const gridItems = subTab === "posts" ? myPosts : savedPosts;
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      {/* Top Username Bar */}
-      <View style={styles.topBar}>
-        <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 6 }}>
-          <Text style={styles.topUsername}>@{currentUser.username}</Text>
-          {currentUser.verified && <Ionicons name="checkmark-circle" size={16} color={COLORS.verified} />}
-          {currentUser.isPrivate && <Ionicons name="lock-closed" size={14} color={COLORS.muted} />}
-        </View>
-        <TouchableOpacity onPress={() => setSubTab(subTab === "settings" ? "posts" : "settings")}>
-          <Ionicons name="settings-outline" size={23} color={COLORS.text} />
-        </TouchableOpacity>
-      </View>
+    <ScrollView
+      style={[styles.container, { backgroundColor: theme.bg }]}
+      contentContainerStyle={{ paddingBottom: 28 }}
+      showsVerticalScrollIndicator={false}
+    >
+      {/* Luxury Atmospheric Cover Banner */}
+      <LinearGradient colors={theme.coverGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.coverBanner}>
+        <View
+          style={{
+            position: "absolute",
+            right: -30,
+            top: -30,
+            width: 150,
+            height: 150,
+            borderRadius: 75,
+            backgroundColor: theme.primarySoft,
+          }}
+        />
+        <View style={styles.coverTopRow}>
+          <View style={[styles.handlePill, { backgroundColor: "rgba(0,0,0,0.45)", borderColor: theme.borderGlow }]}>
+            <Text style={{ color: theme.text, fontWeight: "800", fontSize: 13 }}>@{currentUser.username}</Text>
+            {currentUser.verified && <Ionicons name="checkmark-circle" size={14} color={theme.verified} />}
+            {currentUser.isPrivate && <Ionicons name="lock-closed" size={12} color={theme.primary} />}
+          </View>
 
-      {/* Instagram-Style Header Row: Avatar + Stats */}
-      <View style={styles.profileTop}>
-        <TouchableOpacity onPress={pickAvatar} activeOpacity={0.85}>
-          <LinearGradient colors={["#f59e0b", "#ec4899", "#8b5cf6"]} style={styles.avatarRing}>
-            <View style={styles.avatarInner}>
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <TouchableOpacity
+              style={[styles.coverIconBtn, { backgroundColor: "rgba(0,0,0,0.45)", borderColor: theme.borderGlow }]}
+              onPress={() => setThemeOpen(true)}
+            >
+              <Ionicons name="color-palette-outline" size={19} color={theme.primary} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.coverIconBtn, { backgroundColor: "rgba(0,0,0,0.45)", borderColor: theme.border }]}
+              onPress={() => setSubTab(subTab === "settings" ? "posts" : "settings")}
+            >
+              <Ionicons name="settings-outline" size={19} color={theme.text} />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </LinearGradient>
+
+      {/* Overlapping Crowned Squircle Avatar & Identity */}
+      <View style={styles.identityWrap}>
+        <TouchableOpacity onPress={pickAvatar} activeOpacity={0.88} style={styles.avatarOverlap}>
+          <LinearGradient colors={theme.storyGrad} style={[styles.avatarRing, { borderColor: theme.bg }]}>
+            <View style={[styles.avatarInner, { backgroundColor: theme.bg }]}>
               {currentUser.avatarUri ? (
                 <Image source={{ uri: currentUser.avatarUri }} style={styles.avatarImg} />
               ) : (
-                <View style={styles.avatarFallback}>
-                  <Ionicons name="person" size={38} color={COLORS.muted} />
+                <View style={[styles.avatarFallback, { backgroundColor: theme.surface2 }]}>
+                  <Ionicons name="person" size={38} color={theme.muted} />
                 </View>
               )}
             </View>
           </LinearGradient>
+          <LinearGradient colors={theme.btnGrad} style={[styles.cameraBadge, { borderColor: theme.bg }]}>
+            <Ionicons name="camera" size={13} color={theme.btnText} />
+          </LinearGradient>
         </TouchableOpacity>
 
-        <View style={styles.statsRow}>
-          <TouchableOpacity style={styles.stat} onPress={() => setSubTab("posts")}>
-            <Text style={styles.statNum}>{myPosts.length}</Text>
-            <Text style={styles.statLabel}>منشور</Text>
-          </TouchableOpacity>
-          <View style={styles.stat}>
-            <Text style={styles.statNum}>{currentUser.followers}</Text>
-            <Text style={styles.statLabel}>متابِع</Text>
-          </View>
-          <View style={styles.stat}>
-            <Text style={styles.statNum}>{currentUser.following}</Text>
-            <Text style={styles.statLabel}>يتابِع</Text>
-          </View>
+        <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 6, marginTop: 10 }}>
+          <Text style={[styles.displayName, { color: theme.text }]}>{currentUser.name}</Text>
+          {currentUser.verified && <Ionicons name="checkmark-circle" size={18} color={theme.verified} />}
         </View>
-      </View>
 
-      {/* Name, Role, VIP Pill & Bio */}
-      <View style={styles.bioWrap}>
-        <View style={{ flexDirection: "row-reverse", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-          <Text style={styles.displayName}>{currentUser.name}</Text>
+        <View style={{ flexDirection: "row-reverse", alignItems: "center", flexWrap: "wrap", justifyContent: "center", gap: 8, marginTop: 6 }}>
           {roleBadge && (
-            <View style={[styles.vipPill, { backgroundColor: "rgba(168,85,247,0.18)" }]}>
-              <Text style={[styles.vipText, { color: roleBadge.color }]}>{roleBadge.label}</Text>
+            <View style={[styles.badgePill, { backgroundColor: theme.primarySoft, borderColor: theme.borderGlow }]}>
+              <Text style={{ color: roleBadge.color, fontSize: 11, fontWeight: "800" }}>{roleBadge.label}</Text>
             </View>
           )}
-          <TouchableOpacity style={styles.vipPill} onPress={() => setStreakOpen(true)}>
-            <Text style={styles.vipText}>🏆 {pts} نقطة · متجر 🎁</Text>
+          <TouchableOpacity
+            style={[styles.badgePill, { backgroundColor: theme.primarySoft, borderColor: theme.borderGlow }]}
+            onPress={() => setStreakOpen(true)}
+          >
+            <Text style={{ color: theme.primary, fontSize: 11.5, fontWeight: "900" }}>
+              🪙 {pts.toLocaleString("fr-DZ")} نقطة · المتجر 🎁
+            </Text>
+          </TouchableOpacity>
+          <View style={[styles.badgePill, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <Text style={{ color: theme.muted, fontSize: 11, fontWeight: "700" }}>{creatorLevel.title}</Text>
+          </View>
+        </View>
+
+        <Text style={[styles.bio, { color: theme.muted }]}>{currentUser.bio}</Text>
+
+        {/* Frosted Glass KPI Bar */}
+        <View style={[styles.kpiCapsule, { backgroundColor: theme.surface, borderColor: theme.borderGlow }]}>
+          <TouchableOpacity style={styles.kpiCol} onPress={() => setSubTab("posts")}>
+            <Text style={[styles.statNum, { color: theme.text }]}>{myPosts.length}</Text>
+            <Text style={[styles.statLabel, { color: theme.muted }]}>منشور</Text>
+          </TouchableOpacity>
+          <View style={[styles.kpiDivider, { backgroundColor: theme.border }]} />
+          <View style={styles.kpiCol}>
+            <Text style={[styles.statNum, { color: theme.text }]}>{currentUser.followers}</Text>
+            <Text style={[styles.statLabel, { color: theme.muted }]}>متابِع</Text>
+          </View>
+          <View style={[styles.kpiDivider, { backgroundColor: theme.border }]} />
+          <View style={styles.kpiCol}>
+            <Text style={[styles.statNum, { color: theme.text }]}>{currentUser.following}</Text>
+            <Text style={[styles.statLabel, { color: theme.muted }]}>يتابِع</Text>
+          </View>
+          <View style={[styles.kpiDivider, { backgroundColor: theme.border }]} />
+          <TouchableOpacity style={styles.kpiCol} onPress={() => setAnalyticsOpen(true)}>
+            <Text style={[styles.statNum, { color: theme.primary }]}>{estReach}</Text>
+            <Text style={[styles.statLabel, { color: theme.muted }]}>الوصول</Text>
           </TouchableOpacity>
         </View>
-        <Text style={styles.bio}>{currentUser.bio}</Text>
 
-        {/* Action Buttons + Creator Analytics Studio */}
+        {/* Action Buttons Row */}
         <View style={styles.btnRow}>
+          <TouchableOpacity style={{ flex: 1.25 }} activeOpacity={0.88} onPress={() => setAnalyticsOpen(true)}>
+            <LinearGradient colors={theme.btnGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.primaryActionBtn}>
+              <Ionicons name="stats-chart" size={15} color={theme.btnText} />
+              <Text style={{ color: theme.btnText, fontWeight: "900", fontSize: 12.5 }}>إحصائياتي</Text>
+            </LinearGradient>
+          </TouchableOpacity>
           <TouchableOpacity
-            style={styles.grayBtn}
+            style={[styles.glassBtn, { backgroundColor: theme.surface, borderColor: theme.border }]}
             onPress={() => {
               setEditName(currentUser.name);
               setEditBio(currentUser.bio);
               setEditing((v) => !v);
             }}
           >
-            <Text style={styles.grayBtnText}>{editing ? "إغلاق" : "تعديل الملف"}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.grayBtn, { backgroundColor: "rgba(168,85,247,0.2)" }]} onPress={() => setAnalyticsOpen(true)}>
-            <Text style={[styles.grayBtnText, { color: "#e9d5ff" }]}>📊 إحصائياتي</Text>
+            <Text style={{ color: theme.text, fontWeight: "800", fontSize: 12.5 }}>
+              {editing ? "إغلاق" : "تعديل"}
+            </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={styles.grayBtn}
+            style={[styles.glassBtn, { backgroundColor: theme.surface, borderColor: theme.border }]}
             onPress={() => Share.share({ message: `تابعني على تطبيق SHAHINAZ: @${currentUser.username}` })}
           >
-            <Text style={styles.grayBtnText}>مشاركة</Text>
+            <Text style={{ color: theme.text, fontWeight: "800", fontSize: 12.5 }}>مشاركة</Text>
           </TouchableOpacity>
         </View>
 
         {editing && (
-          <View style={styles.editBox}>
-            <TextInput style={styles.input} placeholder="الاسم" placeholderTextColor={COLORS.muted} value={editName} onChangeText={setEditName} />
-            <TextInput style={styles.input} placeholder="البايو" placeholderTextColor={COLORS.muted} value={editBio} onChangeText={setEditBio} />
+          <View style={[styles.editBox, { backgroundColor: theme.surface, borderColor: theme.borderGlow }]}>
+            <TextInput
+              style={[styles.input, { backgroundColor: theme.surface2, color: theme.text, borderColor: theme.border }]}
+              placeholder="الاسم"
+              placeholderTextColor={theme.muted}
+              value={editName}
+              onChangeText={setEditName}
+            />
+            <TextInput
+              style={[styles.input, { backgroundColor: theme.surface2, color: theme.text, borderColor: theme.border }]}
+              placeholder="البايو"
+              placeholderTextColor={theme.muted}
+              value={editBio}
+              onChangeText={setEditBio}
+            />
             <TouchableOpacity
-              style={styles.saveBtn}
+              activeOpacity={0.88}
               onPress={() => {
                 updateProfile(editName, editBio);
                 setEditing(false);
                 Alert.alert("تم الحفظ ✓", "تم تحديث بيانات ملفك الشخصي.");
               }}
             >
-              <Text style={{ color: "#fff", fontWeight: "700" }}>حفظ التغييرات</Text>
+              <LinearGradient colors={theme.btnGrad} style={styles.saveBtn}>
+                <Text style={{ color: theme.btnText, fontWeight: "900" }}>حفظ التغييرات</Text>
+              </LinearGradient>
             </TouchableOpacity>
           </View>
         )}
       </View>
 
-      {/* Instagram Icon Tab Bar */}
-      <View style={styles.subTabs}>
-        <TouchableOpacity style={[styles.subTabBtn, subTab === "posts" && styles.subTabActive]} onPress={() => setSubTab("posts")}>
-          <Ionicons name="grid-outline" size={22} color={subTab === "posts" ? COLORS.text : COLORS.muted} />
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.subTabBtn, subTab === "saved" && styles.subTabActive]} onPress={() => setSubTab("saved")}>
-          <Ionicons name="bookmark-outline" size={22} color={subTab === "saved" ? COLORS.text : COLORS.muted} />
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.subTabBtn, subTab === "settings" && styles.subTabActive]} onPress={() => setSubTab("settings")}>
-          <Ionicons name="shield-checkmark-outline" size={22} color={subTab === "settings" ? COLORS.text : COLORS.muted} />
-        </TouchableOpacity>
+      {/* Frosted Pill Sub-Tab Switcher */}
+      <View style={[styles.subTabs, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+        {[
+          { key: "posts" as const, icon: "grid" as const, label: "منشوراتي" },
+          { key: "saved" as const, icon: "bookmark" as const, label: "المحفوظات" },
+          { key: "settings" as const, icon: "shield-checkmark" as const, label: "الخصوصية" },
+        ].map((t) => {
+          const active = subTab === t.key;
+          return (
+            <TouchableOpacity
+              key={t.key}
+              style={[styles.subTabBtn, active && { backgroundColor: theme.primarySoft }]}
+              onPress={() => setSubTab(t.key)}
+            >
+              <Ionicons name={t.icon} size={16} color={active ? theme.primary : theme.muted} />
+              <Text style={{ color: active ? theme.primary : theme.muted, fontSize: 12, fontWeight: active ? "900" : "700" }}>
+                {t.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
-      {/* Grid Views (My Posts / Saved Posts) — Every Tile Interactive! */}
+      {/* Rounded Gallery Grid / Settings */}
       {subTab !== "settings" ? (
         gridItems.length === 0 ? (
-          <View style={styles.emptyBox}>
-            <Ionicons name={subTab === "posts" ? "camera-outline" : "bookmark-outline"} size={40} color={COLORS.muted} />
-            <Text style={styles.emptyText}>
-              {subTab === "posts" ? "لم تنشر أي صورة بعد — اضغط + للبدء" : "لا توجد منشورات محفوظة بعد"}
+          <View style={[styles.emptyBox, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <Ionicons name={subTab === "posts" ? "camera-outline" : "bookmark-outline"} size={38} color={theme.primary} />
+            <Text style={{ color: theme.muted, fontSize: 13, fontWeight: "700" }}>
+              {subTab === "posts" ? "لم تنشر أي صورة بعد — اضغط + في الأسفل" : "لا توجد منشورات محفوظة بعد"}
             </Text>
           </View>
         ) : (
@@ -254,49 +335,67 @@ export default function ProfileScreen() {
             {gridItems.map((item) => (
               <TouchableOpacity
                 key={item.id}
-                style={styles.gridTile}
+                style={[styles.gridTile, { backgroundColor: theme.surface, borderColor: theme.border }]}
                 activeOpacity={0.85}
                 onPress={() => setSelectedPostId(item.id)}
               >
                 {item.imageUri ? (
                   <Image source={{ uri: item.imageUri }} style={styles.gridImg} resizeMode="cover" />
                 ) : (
-                  <LinearGradient colors={[item.bgColor || "#6d28d9", "#111827"]} style={styles.gridImg}>
+                  <LinearGradient colors={[item.bgColor || "#7C3AED", "#0B0E17"]} style={styles.gridImg}>
                     <Text style={styles.gridText} numberOfLines={3}>
                       {item.content}
                     </Text>
                   </LinearGradient>
                 )}
+                <View style={styles.gridLikeBadge}>
+                  <Ionicons name="heart" size={10} color="#fff" />
+                  <Text style={{ color: "#fff", fontSize: 9.5, fontWeight: "800" }}>{item.likes}</Text>
+                </View>
               </TouchableOpacity>
             ))}
           </View>
         )
       ) : (
-        /* Settings & Google Play Compliance Panel (Admin entry completely hidden!) */
         <View style={styles.settingsBox}>
-          <TouchableOpacity activeOpacity={0.8} style={styles.settingRow} onPress={togglePrivateAccount}>
-            <Switch value={!!currentUser.isPrivate} onValueChange={togglePrivateAccount} />
+          <TouchableOpacity
+            style={[styles.settingRow, { backgroundColor: theme.surface, borderColor: theme.borderGlow }]}
+            onPress={() => setThemeOpen(true)}
+          >
+            <Ionicons name="chevron-back" size={18} color={theme.primary} />
             <View style={{ flex: 1, alignItems: "flex-end", paddingLeft: 10 }}>
-              <Text style={styles.settingTitle}>حساب خاص (Private)</Text>
-              <Text style={styles.settingSub}>فقط المتابعون الموافق عليهم يرون منشوراتك</Text>
+              <Text style={[styles.settingTitle, { color: theme.text }]}>🎨 مظهر وهوية SHAHINAZ</Text>
+              <Text style={[styles.settingSub, { color: theme.primary }]}>الثيم الحالي: {theme.emoji} {theme.name}</Text>
             </View>
           </TouchableOpacity>
 
-          <View style={styles.blockedCard}>
+          <TouchableOpacity
+            activeOpacity={0.8}
+            style={[styles.settingRow, { backgroundColor: theme.surface, borderColor: theme.border }]}
+            onPress={togglePrivateAccount}
+          >
+            <Switch value={!!currentUser.isPrivate} onValueChange={togglePrivateAccount} />
+            <View style={{ flex: 1, alignItems: "flex-end", paddingLeft: 10 }}>
+              <Text style={[styles.settingTitle, { color: theme.text }]}>حساب خاص (Private)</Text>
+              <Text style={[styles.settingSub, { color: theme.muted }]}>فقط المتابعون الموافق عليهم يرون منشوراتك</Text>
+            </View>
+          </TouchableOpacity>
+
+          <View style={[styles.blockedCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
             <View style={{ flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center" }}>
-              <Text style={styles.settingTitle}>المستخدمون المحظورون</Text>
-              <Text style={{ color: COLORS.muted, fontWeight: "700" }}>{blockedUserIds.length}</Text>
+              <Text style={[styles.settingTitle, { color: theme.text }]}>المستخدمون المحظورون</Text>
+              <Text style={{ color: theme.muted, fontWeight: "700" }}>{blockedUserIds.length}</Text>
             </View>
             {blockedUserIds.length > 0 && (
               <View style={{ marginTop: 8, gap: 6 }}>
                 {blockedUserIds.map((uid) => {
                   const u = allUsers.find((x) => x.id === uid);
                   return (
-                    <View key={uid} style={styles.blockedItem}>
+                    <View key={uid} style={[styles.blockedItem, { borderTopColor: theme.border }]}>
                       <TouchableOpacity onPress={() => unblockUser(uid)}>
-                        <Text style={{ color: COLORS.verified, fontSize: 12, fontWeight: "700" }}>إلغاء الحظر</Text>
+                        <Text style={{ color: theme.primary, fontSize: 12, fontWeight: "800" }}>إلغاء الحظر</Text>
                       </TouchableOpacity>
-                      <Text style={{ color: COLORS.text, fontSize: 13 }}>{u ? u.name : uid}</Text>
+                      <Text style={{ color: theme.text, fontSize: 13 }}>{u ? u.name : uid}</Text>
                     </View>
                   );
                 })}
@@ -304,12 +403,12 @@ export default function ProfileScreen() {
             )}
           </View>
 
-          <TouchableOpacity style={styles.logoutBtn} onPress={logout}>
-            <Text style={{ color: COLORS.text, fontWeight: "700" }}>تسجيل الخروج</Text>
+          <TouchableOpacity style={[styles.logoutBtn, { backgroundColor: theme.surface2 }]} onPress={logout}>
+            <Text style={{ color: theme.text, fontWeight: "800" }}>تسجيل الخروج</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.dangerBtn} onPress={confirmDeleteAccount}>
-            <Text style={{ color: COLORS.danger, fontWeight: "700" }}>حذف الحساب نهائياً</Text>
+          <TouchableOpacity style={[styles.dangerBtn, { borderColor: theme.danger }]} onPress={confirmDeleteAccount}>
+            <Text style={{ color: theme.danger, fontWeight: "800" }}>حذف الحساب نهائياً</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -317,26 +416,26 @@ export default function ProfileScreen() {
             onPress={handleSecretVersionTap}
             style={{ alignItems: "center", paddingTop: 14, paddingBottom: 6 }}
           >
-            <Text style={{ color: COLORS.muted, fontSize: 11.5 }}>SHAHINAZ Ultra 3.0 · OTA Live</Text>
+            <Text style={{ color: theme.muted, fontSize: 11.5 }}>SHAHINAZ Ultra 4.0 · Obsidian Couture</Text>
           </TouchableOpacity>
         </View>
       )}
 
-      {/* Interactive Post Detail Modal for Grid Tiles */}
+      {/* Interactive Post Detail Modal */}
       <Modal visible={!!selectedPost} transparent animationType="fade" onRequestClose={() => setSelectedPostId(null)}>
         <View style={styles.modalBackdrop}>
           {selectedPost && (
-            <View style={styles.postModalCard}>
-              <View style={styles.postModalHead}>
-                <Text style={{ color: COLORS.text, fontWeight: "700", fontSize: 14 }}>{selectedPost.author.name}</Text>
+            <View style={[styles.postModalCard, { backgroundColor: theme.bgAlt, borderColor: theme.borderGlow }]}>
+              <View style={[styles.postModalHead, { borderBottomColor: theme.border }]}>
+                <Text style={{ color: theme.text, fontWeight: "800", fontSize: 14 }}>{selectedPost.author.name}</Text>
                 <TouchableOpacity onPress={() => setSelectedPostId(null)}>
-                  <Ionicons name="close" size={24} color={COLORS.text} />
+                  <Ionicons name="close" size={24} color={theme.text} />
                 </TouchableOpacity>
               </View>
               {selectedPost.imageUri ? (
                 <Image source={{ uri: selectedPost.imageUri }} style={styles.postModalImg} resizeMode="cover" />
               ) : (
-                <LinearGradient colors={[selectedPost.bgColor || "#6d28d9", "#111827"]} style={styles.postModalTextBox}>
+                <LinearGradient colors={[selectedPost.bgColor || "#7C3AED", "#0B0E17"]} style={styles.postModalTextBox}>
                   <Text style={{ color: "#fff", fontSize: 18, fontWeight: "800", textAlign: "center" }}>
                     {selectedPost.content}
                   </Text>
@@ -344,7 +443,7 @@ export default function ProfileScreen() {
               )}
               <View style={{ padding: 14, gap: 10 }}>
                 {!!selectedPost.imageUri && !!selectedPost.content && (
-                  <Text style={{ color: COLORS.text, fontSize: 13.5, textAlign: "right", lineHeight: 20 }}>
+                  <Text style={{ color: theme.text, fontSize: 13.5, textAlign: "right", lineHeight: 20 }}>
                     {selectedPost.content}
                   </Text>
                 )}
@@ -357,21 +456,21 @@ export default function ProfileScreen() {
                       <Ionicons
                         name={selectedPost.likedByMe ? "heart" : "heart-outline"}
                         size={22}
-                        color={selectedPost.likedByMe ? COLORS.heart : COLORS.text}
+                        color={selectedPost.likedByMe ? theme.heart : theme.text}
                       />
-                      <Text style={{ color: COLORS.text, fontWeight: "700", fontSize: 13 }}>{selectedPost.likes}</Text>
+                      <Text style={{ color: theme.text, fontWeight: "700", fontSize: 13 }}>{selectedPost.likes}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity onPress={() => toggleSave(selectedPost.id)}>
                       <Ionicons
                         name={selectedPost.savedByMe ? "bookmark" : "bookmark-outline"}
                         size={21}
-                        color={COLORS.text}
+                        color={selectedPost.savedByMe ? theme.primary : theme.text}
                       />
                     </TouchableOpacity>
                     <TouchableOpacity
                       onPress={() => Share.share({ message: `${selectedPost.author.name} على SHAHINAZ:\n${selectedPost.content}` })}
                     >
-                      <Ionicons name="paper-plane-outline" size={21} color={COLORS.text} />
+                      <Ionicons name="paper-plane-outline" size={21} color={theme.text} />
                     </TouchableOpacity>
                   </View>
                   {selectedPost.author.id === currentUser.id && (
@@ -390,7 +489,7 @@ export default function ProfileScreen() {
                         ])
                       }
                     >
-                      <Text style={{ color: COLORS.danger, fontWeight: "700", fontSize: 12.5 }}>🗑️ حذف المنشور</Text>
+                      <Text style={{ color: theme.danger, fontWeight: "800", fontSize: 12.5 }}>🗑️ حذف المنشور</Text>
                     </TouchableOpacity>
                   )}
                 </View>
@@ -403,65 +502,65 @@ export default function ProfileScreen() {
       {/* Creator Analytics Studio Modal */}
       <Modal visible={analyticsOpen} transparent animationType="slide" onRequestClose={() => setAnalyticsOpen(false)}>
         <View style={styles.modalBackdrop}>
-          <View style={styles.analyticsCard}>
+          <View style={[styles.analyticsCard, { backgroundColor: theme.bgAlt, borderColor: theme.borderGlow }]}>
             <View style={{ flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-              <Text style={{ color: COLORS.text, fontSize: 16, fontWeight: "900" }}>📊 استوديو تحليلاتك</Text>
+              <Text style={{ color: theme.text, fontSize: 16, fontWeight: "900" }}>📊 استوديو تحليلاتك</Text>
               <TouchableOpacity onPress={() => setAnalyticsOpen(false)}>
-                <Ionicons name="close" size={24} color={COLORS.text} />
+                <Ionicons name="close" size={24} color={theme.text} />
               </TouchableOpacity>
             </View>
 
             <LinearGradient
-              colors={["#4c1d95", "#831843"]}
+              colors={theme.coverGrad}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
-              style={{ borderRadius: 14, padding: 14, marginBottom: 14 }}
+              style={{ borderRadius: 18, padding: 14, marginBottom: 14, borderWidth: 1, borderColor: theme.borderGlow }}
             >
               <View style={{ flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center" }}>
                 <View style={{ alignItems: "flex-end" }}>
-                  <Text style={{ color: "#e9d5ff", fontSize: 11, fontWeight: "700" }}>مستوى صانع المحتوى</Text>
-                  <Text style={{ color: "#fff", fontSize: 17, fontWeight: "900", marginTop: 2 }}>{creatorLevel.title}</Text>
+                  <Text style={{ color: theme.primary, fontSize: 11, fontWeight: "800" }}>مستوى صانع المحتوى</Text>
+                  <Text style={{ color: theme.text, fontSize: 17, fontWeight: "900", marginTop: 2 }}>{creatorLevel.title}</Text>
                 </View>
-                <View style={{ backgroundColor: "rgba(0,0,0,0.35)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999 }}>
-                  <Text style={{ color: "#fde68a", fontWeight: "800", fontSize: 12 }}>🪙 {pts} نقطة</Text>
+                <View style={{ backgroundColor: theme.primarySoft, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999 }}>
+                  <Text style={{ color: theme.primary, fontWeight: "900", fontSize: 12 }}>🪙 {pts} نقطة</Text>
                 </View>
               </View>
-              <View style={{ height: 7, backgroundColor: "rgba(255,255,255,0.18)", borderRadius: 4, marginTop: 12, overflow: "hidden" }}>
-                <View style={{ width: `${creatorLevel.pct}%`, height: "100%", backgroundColor: "#fde68a", borderRadius: 4 }} />
+              <View style={{ height: 7, backgroundColor: "rgba(255,255,255,0.14)", borderRadius: 4, marginTop: 12, overflow: "hidden" }}>
+                <LinearGradient colors={theme.btnGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ width: `${creatorLevel.pct}%`, height: "100%", borderRadius: 4 }} />
               </View>
-              <Text style={{ color: "rgba(255,255,255,0.8)", fontSize: 11, textAlign: "right", marginTop: 5 }}>
+              <Text style={{ color: theme.muted, fontSize: 11, textAlign: "right", marginTop: 5 }}>
                 التقدم للمستوى التالي: {creatorLevel.pct}%
               </Text>
             </LinearGradient>
 
             <View style={{ flexDirection: "row-reverse", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
               {[
-                { label: "الوصول التقديري", val: estReach.toLocaleString("fr-DZ"), icon: "eye-outline" as const, color: "#38bdf8" },
-                { label: "مجموع الإعجابات", val: totalLikes.toLocaleString("fr-DZ"), icon: "heart" as const, color: COLORS.heart },
-                { label: "التعليقات", val: String(totalComments), icon: "chatbubble-ellipses" as const, color: "#a855f7" },
-                { label: "منشوراتك", val: String(myPosts.length), icon: "grid-outline" as const, color: COLORS.success },
+                { label: "الوصول التقديري", val: estReach.toLocaleString("fr-DZ"), icon: "eye-outline" as const, color: theme.primary },
+                { label: "مجموع الإعجابات", val: totalLikes.toLocaleString("fr-DZ"), icon: "heart" as const, color: theme.heart },
+                { label: "التعليقات", val: String(totalComments), icon: "chatbubble-ellipses" as const, color: theme.verified },
+                { label: "منشوراتك", val: String(myPosts.length), icon: "grid-outline" as const, color: theme.success },
               ].map((kpi) => (
-                <View key={kpi.label} style={styles.kpiBox}>
+                <View key={kpi.label} style={[styles.kpiBox, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                   <Ionicons name={kpi.icon} size={18} color={kpi.color} />
-                  <Text style={{ color: COLORS.text, fontSize: 18, fontWeight: "900", marginTop: 4 }}>{kpi.val}</Text>
-                  <Text style={{ color: COLORS.muted, fontSize: 11 }}>{kpi.label}</Text>
+                  <Text style={{ color: theme.text, fontSize: 18, fontWeight: "900", marginTop: 4 }}>{kpi.val}</Text>
+                  <Text style={{ color: theme.muted, fontSize: 11 }}>{kpi.label}</Text>
                 </View>
               ))}
             </View>
 
             {myPosts.length > 0 && (
-              <View style={{ backgroundColor: COLORS.surface2, borderRadius: 12, padding: 12, marginBottom: 14, borderWidth: 0.5, borderColor: COLORS.border }}>
-                <Text style={{ color: COLORS.warn, fontSize: 11, fontWeight: "800", textAlign: "right", marginBottom: 4 }}>
+              <View style={{ backgroundColor: theme.surface, borderRadius: 14, padding: 12, marginBottom: 14, borderWidth: 1, borderColor: theme.border }}>
+                <Text style={{ color: theme.primary, fontSize: 11, fontWeight: "800", textAlign: "right", marginBottom: 4 }}>
                   🏆 أفضل منشور أداءً
                 </Text>
                 {(() => {
                   const topPost = [...myPosts].sort((a, b) => b.likes - a.likes)[0];
                   return (
                     <View style={{ flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-                      <Text style={{ color: COLORS.text, fontSize: 12.5, flex: 1, textAlign: "right" }} numberOfLines={2}>
+                      <Text style={{ color: theme.text, fontSize: 12.5, flex: 1, textAlign: "right" }} numberOfLines={2}>
                         {topPost.content || "منشور مصوّر"}
                       </Text>
-                      <Text style={{ color: COLORS.heart, fontWeight: "800", fontSize: 13 }}>❤️ {topPost.likes}</Text>
+                      <Text style={{ color: theme.heart, fontWeight: "800", fontSize: 13 }}>❤️ {topPost.likes}</Text>
                     </View>
                   );
                 })()}
@@ -469,24 +568,25 @@ export default function ProfileScreen() {
             )}
 
             <TouchableOpacity
-              style={styles.saveBtn}
+              activeOpacity={0.88}
               onPress={() => {
                 setAnalyticsOpen(false);
                 setTimeout(() => setStreakOpen(true), 200);
               }}
             >
-              <Text style={{ color: "#fff", fontWeight: "800", fontSize: 13 }}>
-                🔥 افتح المكافآت اليومية ومتجر التوثيق والنقاط
-              </Text>
+              <LinearGradient colors={theme.btnGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.saveBtn}>
+                <Text style={{ color: theme.btnText, fontWeight: "900", fontSize: 13 }}>
+                  🔥 افتح المكافآت اليومية ومتجر النقاط
+                </Text>
+              </LinearGradient>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
 
-      {/* Daily Login Streak & SHAHINAZ Coin Store */}
       <DailyStreakModal visible={streakOpen} onClose={() => setStreakOpen(false)} />
+      <ThemeStudioModal visible={themeOpen} onClose={() => setThemeOpen(false)} />
 
-      {/* Encrypted Developer Vault PIN Keypad */}
       <DevVaultModal
         visible={devVaultOpen}
         expectedPin={adminPin}
@@ -494,7 +594,6 @@ export default function ProfileScreen() {
         onUnlock={() => setShowAdmin(true)}
       />
 
-      {/* Full-Screen Super-Admin Command Center Modal */}
       <Modal visible={showAdmin} animationType="slide" onRequestClose={() => setShowAdmin(false)}>
         <AdminScreen onClose={() => setShowAdmin(false)} />
       </Modal>
@@ -503,141 +602,221 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bg },
-  topBar: {
+  container: { flex: 1 },
+  coverBanner: {
+    height: 146,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    overflow: "hidden",
+  },
+  coverTopRow: {
     flexDirection: "row-reverse",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
   },
-  topUsername: { color: COLORS.text, fontSize: 18, fontWeight: "800" },
-  profileTop: {
+  handlePill: {
     flexDirection: "row-reverse",
     alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingTop: 6,
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
   },
-  avatarRing: { width: 88, height: 88, borderRadius: 44, padding: 3, alignItems: "center", justifyContent: "center" },
-  avatarInner: { width: 82, height: 82, borderRadius: 41, backgroundColor: COLORS.bg, padding: 2 },
-  avatarImg: { width: 78, height: 78, borderRadius: 39 },
-  avatarFallback: {
-    width: 78,
-    height: 78,
-    borderRadius: 39,
-    backgroundColor: COLORS.surface2,
+  coverIconBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
   },
-  statsRow: { flex: 1, flexDirection: "row-reverse", justifyContent: "space-around", paddingRight: 16 },
-  stat: { alignItems: "center" },
-  statNum: { color: COLORS.text, fontSize: 18, fontWeight: "800" },
-  statLabel: { color: COLORS.muted, fontSize: 12, marginTop: 2 },
-  bioWrap: { paddingHorizontal: 16, paddingTop: 12, alignItems: "flex-end" },
-  displayName: { color: COLORS.text, fontSize: 15, fontWeight: "700" },
-  vipPill: { backgroundColor: "rgba(245,158,11,0.16)", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999 },
-  vipText: { color: COLORS.warn, fontSize: 11, fontWeight: "700" },
-  bio: { color: COLORS.muted, fontSize: 13, marginTop: 4, textAlign: "right", lineHeight: 19 },
-  btnRow: { flexDirection: "row-reverse", gap: 8, marginTop: 14, width: "100%" },
-  grayBtn: { flex: 1, backgroundColor: COLORS.surface2, borderRadius: 10, paddingVertical: 9, alignItems: "center" },
-  grayBtnText: { color: COLORS.text, fontWeight: "700", fontSize: 13 },
-  editBox: { width: "100%", marginTop: 12, gap: 8 },
+  identityWrap: {
+    alignItems: "center",
+    paddingHorizontal: 16,
+  },
+  avatarOverlap: {
+    marginTop: -50,
+    position: "relative",
+  },
+  avatarRing: {
+    width: 96,
+    height: 96,
+    borderRadius: 34,
+    padding: 3.5,
+    borderWidth: 3,
+  },
+  avatarInner: {
+    flex: 1,
+    borderRadius: 28,
+    padding: 2,
+  },
+  avatarImg: { width: "100%", height: "100%", borderRadius: 26 },
+  avatarFallback: {
+    flex: 1,
+    borderRadius: 26,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cameraBadge: {
+    position: "absolute",
+    bottom: -2,
+    left: -2,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 2.5,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  displayName: { fontSize: 20, fontWeight: "900" },
+  badgePill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    borderWidth: 0.8,
+  },
+  bio: { fontSize: 13, marginTop: 8, textAlign: "center", lineHeight: 20, paddingHorizontal: 10 },
+  kpiCapsule: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    width: "100%",
+    borderRadius: 22,
+    borderWidth: 1,
+    paddingVertical: 14,
+    marginTop: 14,
+  },
+  kpiCol: { flex: 1, alignItems: "center" },
+  kpiDivider: { width: 1, height: 26 },
+  statNum: { fontSize: 17, fontWeight: "900" },
+  statLabel: { fontSize: 11, marginTop: 2, fontWeight: "600" },
+  btnRow: { flexDirection: "row-reverse", gap: 8, marginTop: 12, width: "100%" },
+  primaryActionBtn: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    borderRadius: 15,
+    paddingVertical: 11,
+  },
+  glassBtn: {
+    flex: 1,
+    borderRadius: 15,
+    borderWidth: 1,
+    paddingVertical: 11,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  editBox: {
+    width: "100%",
+    marginTop: 12,
+    padding: 14,
+    borderRadius: 20,
+    borderWidth: 1,
+    gap: 8,
+  },
   input: {
-    backgroundColor: COLORS.surface2,
-    borderRadius: 10,
+    borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    color: COLORS.text,
     textAlign: "right",
-    borderWidth: 0.5,
-    borderColor: COLORS.border,
+    borderWidth: 1,
   },
-  saveBtn: { backgroundColor: COLORS.verified, borderRadius: 10, padding: 11, alignItems: "center" },
+  saveBtn: { borderRadius: 14, padding: 13, alignItems: "center" },
   subTabs: {
     flexDirection: "row-reverse",
+    marginHorizontal: 16,
     marginTop: 18,
-    borderTopWidth: 0.5,
-    borderBottomWidth: 0.5,
-    borderColor: COLORS.border,
+    marginBottom: 14,
+    padding: 4,
+    borderRadius: 18,
+    borderWidth: 1,
+    gap: 4,
   },
-  subTabBtn: { flex: 1, alignItems: "center", paddingVertical: 11, borderBottomWidth: 2, borderBottomColor: "transparent" },
-  subTabActive: { borderBottomColor: COLORS.text },
-  gridWrap: { flexDirection: "row-reverse", flexWrap: "wrap", gap: 2, paddingTop: 2 },
-  gridTile: { width: GRID_SIZE, height: GRID_SIZE, backgroundColor: COLORS.surface },
+  subTabBtn: {
+    flex: 1,
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    paddingVertical: 9,
+    borderRadius: 14,
+  },
+  gridWrap: { flexDirection: "row-reverse", flexWrap: "wrap", paddingHorizontal: 12, gap: 6 },
+  gridTile: {
+    width: GRID_SIZE,
+    height: GRID_SIZE * 1.15,
+    borderRadius: 16,
+    overflow: "hidden",
+    borderWidth: 0.8,
+    position: "relative",
+  },
   gridImg: { width: "100%", height: "100%", justifyContent: "center", alignItems: "center", padding: 8 },
   gridText: { color: "#fff", fontSize: 11, fontWeight: "700", textAlign: "center" },
-  emptyBox: { alignItems: "center", paddingVertical: 48, gap: 10 },
-  emptyText: { color: COLORS.muted, fontSize: 13 },
-  settingsBox: { padding: 16, gap: 12, paddingBottom: 40 },
+  gridLikeBadge: {
+    position: "absolute",
+    bottom: 6,
+    left: 6,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: "rgba(0,0,0,0.62)",
+    paddingHorizontal: 6,
+    paddingVertical: 2.5,
+    borderRadius: 999,
+  },
+  emptyBox: {
+    marginHorizontal: 16,
+    paddingVertical: 42,
+    borderRadius: 22,
+    borderWidth: 1,
+    alignItems: "center",
+    gap: 10,
+  },
+  settingsBox: { paddingHorizontal: 16, gap: 10 },
   settingRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: COLORS.surface,
     padding: 14,
-    borderRadius: 12,
-    borderWidth: 0.5,
-    borderColor: COLORS.border,
+    borderRadius: 18,
+    borderWidth: 1,
   },
-  blockedCard: {
-    backgroundColor: COLORS.surface,
-    padding: 14,
-    borderRadius: 12,
-    borderWidth: 0.5,
-    borderColor: COLORS.border,
-  },
+  blockedCard: { padding: 14, borderRadius: 18, borderWidth: 1 },
   blockedItem: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 6,
+    paddingVertical: 7,
     borderTopWidth: 0.5,
-    borderTopColor: COLORS.border,
   },
-  settingTitle: { color: COLORS.text, fontSize: 14, fontWeight: "700" },
-  settingSub: { color: COLORS.muted, fontSize: 11, marginTop: 2 },
-  logoutBtn: { backgroundColor: COLORS.surface2, borderRadius: 12, padding: 13, alignItems: "center" },
+  settingTitle: { fontSize: 14, fontWeight: "800" },
+  settingSub: { fontSize: 11.5, marginTop: 2 },
+  logoutBtn: { borderRadius: 16, padding: 14, alignItems: "center" },
   dangerBtn: {
     backgroundColor: "rgba(239,68,68,0.12)",
-    borderColor: COLORS.danger,
     borderWidth: 1,
-    borderRadius: 12,
-    padding: 13,
+    borderRadius: 16,
+    padding: 14,
     alignItems: "center",
   },
-  modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.85)", justifyContent: "center", padding: 18 },
-  postModalCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 20,
-    overflow: "hidden",
-    borderWidth: 0.5,
-    borderColor: COLORS.border,
-  },
+  modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.84)", justifyContent: "center", padding: 18 },
+  postModalCard: { borderRadius: 24, overflow: "hidden", borderWidth: 1 },
   postModalHead: {
     flexDirection: "row-reverse",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: 12,
+    padding: 14,
     borderBottomWidth: 0.5,
-    borderBottomColor: COLORS.border,
   },
   postModalImg: { width: "100%", height: 320 },
   postModalTextBox: { width: "100%", minHeight: 220, padding: 24, alignItems: "center", justifyContent: "center" },
-  analyticsCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 22,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
+  analyticsCard: { borderRadius: 26, padding: 18, borderWidth: 1 },
   kpiBox: {
     width: "48.5%",
-    backgroundColor: COLORS.surface2,
-    borderRadius: 14,
+    borderRadius: 16,
     padding: 12,
     alignItems: "center",
-    borderWidth: 0.5,
-    borderColor: COLORS.border,
+    borderWidth: 1,
   },
 });

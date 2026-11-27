@@ -2,11 +2,12 @@ import React, { useState } from "react";
 import { Modal, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { COLORS } from "../theme";
+import { useApp } from "../store/AppContext";
 
 type AiTool = "ad" | "reels" | "hashtags" | "profit";
 
 export default function ShahinazAiModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const { theme } = useApp();
   const [tool, setTool] = useState<AiTool>("ad");
   const [topic, setTopic] = useState("");
   const [buyPrice, setBuyPrice] = useState("");
@@ -44,46 +45,56 @@ export default function ShahinazAiModal({ visible, onClose }: { visible: boolean
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.backdrop}>
-        <View style={styles.sheet}>
+        <View style={[styles.sheet, { backgroundColor: theme.bgAlt, borderColor: theme.borderGlow }]}>
           <View style={styles.handle} />
           <View style={styles.header}>
             <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 8 }}>
-              <LinearGradient colors={["#a855f7", "#ec4899"]} style={styles.aiIcon}>
-                <Ionicons name="sparkles" size={16} color="#fff" />
+              <LinearGradient colors={theme.btnGrad} style={styles.aiIcon}>
+                <Ionicons name="sparkles" size={16} color={theme.btnText} />
               </LinearGradient>
-              <Text style={styles.title}>استوديو SHAHINAZ AI الذكي</Text>
+              <Text style={[styles.title, { color: theme.text }]}>استوديو SHAHINAZ AI الذكي</Text>
             </View>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-              <Ionicons name="close" size={20} color="#fff" />
+            <TouchableOpacity onPress={onClose} style={[styles.closeBtn, { backgroundColor: theme.surface2 }]}>
+              <Ionicons name="close" size={20} color={theme.text} />
             </TouchableOpacity>
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingBottom: 24 }}>
-            {/* Tool Switcher */}
             <View style={styles.toolsGrid}>
               {[
                 { key: "ad", label: "✍️ كاتب إعلانات" },
                 { key: "reels", label: "🎬 أفكار ريلز" },
                 { key: "hashtags", label: "🏷️ هاشتاقات" },
                 { key: "profit", label: "💰 حاسبة ربح دج" },
-              ].map((t) => (
-                <TouchableOpacity
-                  key={t.key}
-                  style={[styles.toolChip, tool === t.key && styles.toolChipActive]}
-                  onPress={() => {
-                    setTool(t.key as AiTool);
-                    setOutput("");
-                  }}
-                >
-                  <Text style={[styles.toolTxt, tool === t.key && { color: "#fff" }]}>{t.label}</Text>
-                </TouchableOpacity>
-              ))}
+              ].map((t) => {
+                const active = tool === t.key;
+                return (
+                  <TouchableOpacity
+                    key={t.key}
+                    style={[
+                      styles.toolChip,
+                      {
+                        backgroundColor: active ? theme.primarySoft : theme.surface,
+                        borderColor: active ? theme.primary : theme.border,
+                      },
+                    ]}
+                    onPress={() => {
+                      setTool(t.key as AiTool);
+                      setOutput("");
+                    }}
+                  >
+                    <Text style={{ color: active ? theme.primary : theme.muted, fontSize: 12.5, fontWeight: "800" }}>
+                      {t.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
 
             <TextInput
-              style={styles.input}
+              style={[styles.input, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
               placeholder={tool === "profit" ? "اسم المنتج (مثال: ساعة ذكية)" : "اكتب اسم المنتج أو الفكرة هنا..."}
-              placeholderTextColor={COLORS.muted}
+              placeholderTextColor={theme.muted}
               value={topic}
               onChangeText={setTopic}
             />
@@ -91,25 +102,25 @@ export default function ShahinazAiModal({ visible, onClose }: { visible: boolean
             {tool === "profit" && (
               <View style={{ gap: 8 }}>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
                   placeholder="سعر الشراء بالجملة (دج)"
-                  placeholderTextColor={COLORS.muted}
+                  placeholderTextColor={theme.muted}
                   keyboardType="number-pad"
                   value={buyPrice}
                   onChangeText={setBuyPrice}
                 />
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
                   placeholder="سعر البيع للزبون (دج)"
-                  placeholderTextColor={COLORS.muted}
+                  placeholderTextColor={theme.muted}
                   keyboardType="number-pad"
                   value={sellPrice}
                   onChangeText={setSellPrice}
                 />
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
                   placeholder="تكلفة التوصيل / الإعلان للطلب (دج)"
-                  placeholderTextColor={COLORS.muted}
+                  placeholderTextColor={theme.muted}
                   keyboardType="number-pad"
                   value={deliveryCost}
                   onChangeText={setDeliveryCost}
@@ -117,22 +128,22 @@ export default function ShahinazAiModal({ visible, onClose }: { visible: boolean
               </View>
             )}
 
-            <TouchableOpacity onPress={generateAi} activeOpacity={0.85}>
-              <LinearGradient colors={["#8b5cf6", "#ec4899"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.genBtn}>
-                <Ionicons name="sparkles" size={17} color="#fff" />
-                <Text style={{ color: "#fff", fontWeight: "800", fontSize: 13.5 }}>توليد النتيجة فوراً ⚡</Text>
+            <TouchableOpacity onPress={generateAi} activeOpacity={0.88}>
+              <LinearGradient colors={theme.btnGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.genBtn}>
+                <Ionicons name="sparkles" size={17} color={theme.btnText} />
+                <Text style={{ color: theme.btnText, fontWeight: "900", fontSize: 13.5 }}>توليد النتيجة فوراً ⚡</Text>
               </LinearGradient>
             </TouchableOpacity>
 
             {!!output && (
-              <View style={styles.outCard}>
-                <Text style={styles.outText}>{output}</Text>
+              <View style={[styles.outCard, { backgroundColor: theme.surface, borderColor: theme.borderGlow }]}>
+                <Text style={[styles.outText, { color: theme.text }]}>{output}</Text>
                 <TouchableOpacity
-                  style={styles.shareBtn}
+                  style={[styles.shareBtn, { backgroundColor: theme.primarySoft, borderColor: theme.borderGlow }]}
                   onPress={() => Share.share({ message: output })}
                 >
-                  <Ionicons name="share-social-outline" size={16} color="#fff" />
-                  <Text style={{ color: "#fff", fontWeight: "700", fontSize: 12.5 }}>نسخ / مشاركة النتيجة</Text>
+                  <Ionicons name="share-social-outline" size={16} color={theme.primary} />
+                  <Text style={{ color: theme.primary, fontWeight: "800", fontSize: 12.5 }}>نسخ / مشاركة النتيجة</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -144,19 +155,17 @@ export default function ShahinazAiModal({ visible, onClose }: { visible: boolean
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.8)", justifyContent: "flex-end" },
+  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.82)", justifyContent: "flex-end" },
   sheet: {
-    backgroundColor: "#0b0b0e",
-    borderTopLeftRadius: 26,
-    borderTopRightRadius: 26,
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
     paddingHorizontal: 16,
     paddingTop: 10,
     maxHeight: "86%",
-    borderTopWidth: 1,
-    borderColor: COLORS.border,
+    borderTopWidth: 1.2,
   },
   handle: {
-    width: 42,
+    width: 44,
     height: 4,
     borderRadius: 2,
     backgroundColor: "rgba(255,255,255,0.22)",
@@ -169,62 +178,52 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 12,
   },
-  aiIcon: { width: 30, height: 30, borderRadius: 10, alignItems: "center", justifyContent: "center" },
-  title: { color: "#fff", fontSize: 16.5, fontWeight: "800" },
+  aiIcon: { width: 32, height: 32, borderRadius: 11, alignItems: "center", justifyContent: "center" },
+  title: { fontSize: 16, fontWeight: "900" },
   closeBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: COLORS.surface2,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: "center",
     justifyContent: "center",
   },
-  toolsGrid: { flexDirection: "row-reverse", flexWrap: "wrap", gap: 6 },
+  toolsGrid: { flexDirection: "row-reverse", flexWrap: "wrap", gap: 8 },
   toolChip: {
     width: "48.5%",
-    paddingVertical: 10,
-    borderRadius: 11,
-    backgroundColor: COLORS.surface,
-    borderWidth: 0.5,
-    borderColor: COLORS.border,
+    paddingVertical: 11,
+    borderRadius: 14,
+    borderWidth: 1,
     alignItems: "center",
   },
-  toolChipActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  toolTxt: { color: COLORS.muted, fontSize: 12.5, fontWeight: "700" },
   input: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 12,
+    borderRadius: 14,
     paddingHorizontal: 14,
-    paddingVertical: 11,
-    color: COLORS.text,
+    paddingVertical: 12,
     textAlign: "right",
-    borderWidth: 0.5,
-    borderColor: COLORS.border,
+    borderWidth: 1,
   },
   genBtn: {
     flexDirection: "row-reverse",
     justifyContent: "center",
     alignItems: "center",
     gap: 8,
-    borderRadius: 13,
-    padding: 13,
+    borderRadius: 15,
+    padding: 14,
   },
   outCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 0.5,
-    borderColor: COLORS.primary,
+    borderRadius: 18,
+    padding: 15,
+    borderWidth: 1,
     gap: 12,
   },
-  outText: { color: COLORS.text, fontSize: 13.5, lineHeight: 22, textAlign: "right" },
+  outText: { fontSize: 13.5, lineHeight: 22, textAlign: "right" },
   shareBtn: {
     flexDirection: "row-reverse",
     justifyContent: "center",
     alignItems: "center",
     gap: 6,
-    backgroundColor: COLORS.verified,
-    borderRadius: 10,
-    padding: 10,
+    borderRadius: 12,
+    padding: 11,
+    borderWidth: 1,
   },
 });

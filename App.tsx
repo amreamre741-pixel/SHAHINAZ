@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from "react";
-import { Modal, Platform, StatusBar as RNStatusBar, StyleSheet, TouchableOpacity, View } from "react-native";
+import { Modal, Platform, StatusBar as RNStatusBar, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
-import { COLORS } from "./src/theme";
+import { LinearGradient } from "expo-linear-gradient";
 import { AppProvider, useApp } from "./src/store/AppContext";
 import { devTelemetry } from "./src/services/devTelemetry";
 import AppErrorBoundary from "./src/components/AppErrorBoundary";
@@ -20,7 +20,7 @@ import ProfileScreen from "./src/screens/ProfileScreen";
 type Tab = "feed" | "explore" | "create" | "messages" | "profile";
 
 function MainApp() {
-  const { currentUser, chats, accentColor, devHudEnabled, adminToggleDevHud } = useApp();
+  const { currentUser, chats, theme, devHudEnabled, adminToggleDevHud } = useApp();
   const [tab, setTab] = useState<Tab>("feed");
   const [hudAdminOpen, setHudAdminOpen] = useState(false);
   const unreadMessages = chats.reduce((sum, c) => sum + c.unread, 0);
@@ -31,8 +31,8 @@ function MainApp() {
 
   if (!currentUser) {
     return (
-      <SafeAreaView style={styles.root} edges={["top", "bottom"]}>
-        <StatusBar style="light" backgroundColor={COLORS.bg} translucent={false} />
+      <SafeAreaView style={[styles.root, { backgroundColor: theme.bg }]} edges={["top", "bottom"]}>
+        <StatusBar style="light" backgroundColor={theme.bg} translucent={false} />
         <DevHudOverlay
           visible={devHudEnabled}
           onOpenAdmin={() => setHudAdminOpen(true)}
@@ -48,14 +48,15 @@ function MainApp() {
   }
 
   return (
-    <SafeAreaView style={styles.root} edges={["top", "bottom"]}>
-      <StatusBar style="light" backgroundColor={COLORS.bg} translucent={false} />
+    <SafeAreaView style={[styles.root, { backgroundColor: theme.bg }]} edges={["top", "bottom"]}>
+      <StatusBar style="light" backgroundColor={theme.bg} translucent={false} />
       <DevHudOverlay
         visible={devHudEnabled}
         onOpenAdmin={() => setHudAdminOpen(true)}
         onHideHud={adminToggleDevHud}
       />
       <UpdateBanner />
+
       <View style={styles.body}>
         {tab === "feed" && <FeedScreen />}
         {tab === "explore" && <ExploreScreen />}
@@ -64,48 +65,93 @@ function MainApp() {
         {tab === "profile" && <ProfileScreen />}
       </View>
 
-      {/* Ultra-Clean Instagram AMOLED Bottom Navigation Bar */}
-      <View style={styles.tabBar}>
-        <TouchableOpacity style={styles.tabBtn} onPress={() => setTab("feed")}>
-          <Ionicons name={tab === "feed" ? "home" : "home-outline"} size={25} color={tab === "feed" ? accentColor : COLORS.muted} />
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.tabBtn} onPress={() => setTab("explore")}>
-          <Ionicons name={tab === "explore" ? "search" : "search-outline"} size={26} color={tab === "explore" ? accentColor : COLORS.muted} />
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.tabBtn} onPress={() => setTab("create")}>
-          <Ionicons name={tab === "create" ? "add-circle" : "add-circle-outline"} size={29} color={tab === "create" ? accentColor : COLORS.muted} />
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.tabBtn} onPress={() => setTab("messages")}>
-          <View style={{ position: "relative" }}>
+      {/* SHAHINAZ Obsidian Couture — Floating Glass Capsule Navigation Dock */}
+      <View style={[styles.dockOuter, { backgroundColor: theme.bg }]}>
+        <View
+          style={[
+            styles.dockCapsule,
+            {
+              backgroundColor: theme.dockBg,
+              borderColor: theme.borderGlow,
+              shadowColor: theme.primary,
+            },
+          ]}
+        >
+          <TouchableOpacity
+            style={[styles.dockBtn, tab === "feed" && { backgroundColor: theme.primarySoft }]}
+            onPress={() => setTab("feed")}
+            activeOpacity={0.8}
+          >
             <Ionicons
-              name={tab === "messages" ? "chatbubble-ellipses" : "chatbubble-ellipses-outline"}
-              size={24}
-              color={tab === "messages" ? accentColor : COLORS.muted}
+              name={tab === "feed" ? "home" : "home-outline"}
+              size={22}
+              color={tab === "feed" ? theme.primary : theme.muted}
             />
-            {unreadMessages > 0 && (
-              <View
-                style={{
-                  position: "absolute",
-                  top: -2,
-                  right: -3,
-                  width: 9,
-                  height: 9,
-                  borderRadius: 4.5,
-                  backgroundColor: COLORS.heart,
-                  borderWidth: 1.5,
-                  borderColor: "#000",
-                }}
-              />
-            )}
-          </View>
-        </TouchableOpacity>
+            {tab === "feed" && <View style={[styles.activeDot, { backgroundColor: theme.primary }]} />}
+          </TouchableOpacity>
 
-        <TouchableOpacity style={styles.tabBtn} onPress={() => setTab("profile")}>
-          <Ionicons name={tab === "profile" ? "person-circle" : "person-circle-outline"} size={27} color={tab === "profile" ? accentColor : COLORS.muted} />
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.dockBtn, tab === "explore" && { backgroundColor: theme.primarySoft }]}
+            onPress={() => setTab("explore")}
+            activeOpacity={0.8}
+          >
+            <Ionicons
+              name={tab === "explore" ? "compass" : "compass-outline"}
+              size={24}
+              color={tab === "explore" ? theme.primary : theme.muted}
+            />
+            {tab === "explore" && <View style={[styles.activeDot, { backgroundColor: theme.primary }]} />}
+          </TouchableOpacity>
+
+          {/* Elevated Signature Center Create Orb */}
+          <TouchableOpacity
+            activeOpacity={0.88}
+            onPress={() => setTab("create")}
+            style={[styles.orbWrap, { borderColor: theme.bg, shadowColor: theme.primary }]}
+          >
+            <LinearGradient
+              colors={theme.btnGrad}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.orbGrad}
+            >
+              <Ionicons name={tab === "create" ? "sparkles" : "add"} size={27} color={theme.btnText} />
+            </LinearGradient>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.dockBtn, tab === "messages" && { backgroundColor: theme.primarySoft }]}
+            onPress={() => setTab("messages")}
+            activeOpacity={0.8}
+          >
+            <View style={{ position: "relative" }}>
+              <Ionicons
+                name={tab === "messages" ? "chatbubble-ellipses" : "chatbubble-ellipses-outline"}
+                size={22}
+                color={tab === "messages" ? theme.primary : theme.muted}
+              />
+              {unreadMessages > 0 && (
+                <View style={[styles.unreadBadge, { backgroundColor: theme.heart, borderColor: theme.dockBg }]}>
+                  <Text style={styles.unreadTxt}>{unreadMessages > 9 ? "9+" : unreadMessages}</Text>
+                </View>
+              )}
+            </View>
+            {tab === "messages" && <View style={[styles.activeDot, { backgroundColor: theme.primary }]} />}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.dockBtn, tab === "profile" && { backgroundColor: theme.primarySoft }]}
+            onPress={() => setTab("profile")}
+            activeOpacity={0.8}
+          >
+            <Ionicons
+              name={tab === "profile" ? "person" : "person-outline"}
+              size={22}
+              color={tab === "profile" ? theme.primary : theme.muted}
+            />
+            {tab === "profile" && <View style={[styles.activeDot, { backgroundColor: theme.primary }]} />}
+          </TouchableOpacity>
+        </View>
       </View>
 
       <Modal visible={hudAdminOpen} animationType="slide" onRequestClose={() => setHudAdminOpen(false)}>
@@ -130,17 +176,68 @@ export default function App() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: COLORS.bg,
-    paddingTop: Platform.OS === "android" ? (RNStatusBar.currentHeight ?? 0) * 0.15 : 0,
+    paddingTop: Platform.OS === "android" ? (RNStatusBar.currentHeight ?? 0) * 0.12 : 0,
   },
   body: { flex: 1 },
-  tabBar: {
+  dockOuter: {
+    paddingHorizontal: 14,
+    paddingTop: 6,
+    paddingBottom: 10,
+  },
+  dockCapsule: {
     flexDirection: "row-reverse",
     alignItems: "center",
-    backgroundColor: "#000000",
-    borderTopWidth: 0.5,
-    borderTopColor: COLORS.border,
-    paddingVertical: 10,
+    justifyContent: "space-around",
+    height: 62,
+    borderRadius: 31,
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 14,
   },
-  tabBtn: { flex: 1, alignItems: "center", justifyContent: "center" },
+  dockBtn: {
+    width: 48,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 3,
+  },
+  activeDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+  },
+  orbWrap: {
+    marginTop: -22,
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    borderWidth: 4,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.45,
+    shadowRadius: 14,
+    elevation: 16,
+  },
+  orbGrad: {
+    flex: 1,
+    borderRadius: 26,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  unreadBadge: {
+    position: "absolute",
+    top: -6,
+    right: -8,
+    minWidth: 17,
+    height: 17,
+    borderRadius: 8.5,
+    paddingHorizontal: 4,
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  unreadTxt: { color: "#fff", fontSize: 9.5, fontWeight: "900" },
 });

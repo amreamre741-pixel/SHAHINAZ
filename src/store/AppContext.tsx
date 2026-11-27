@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { apiFetch } from "../services/api";
+import { THEMES, type AppTheme, type ThemeId } from "../theme";
 import type {
   AdminLogItem,
   AudioRoom,
@@ -75,6 +76,8 @@ interface AppContextValue {
   audioRooms: AudioRoom[];
   codOrders: CodOrder[];
   chats: ChatThread[];
+  themeId: ThemeId;
+  theme: AppTheme;
   accentColor: string;
   streakDays: number;
   claimedStreakToday: boolean;
@@ -100,6 +103,7 @@ interface AppContextValue {
   deleteAccount: () => void;
   updateProfile: (name: string, bio: string, avatarUri?: string) => void;
   togglePrivateAccount: () => void;
+  setThemeId: (id: ThemeId) => void;
   setAccentColor: (color: string) => void;
   claimDailyStreak: () => { ok: boolean; reward: number; message: string };
   redeemReward: (kind: "verify" | "vip" | "boost", cost: number) => { ok: boolean; message: string };
@@ -405,7 +409,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [audioRooms, setAudioRooms] = useState<AudioRoom[]>(INITIAL_AUDIO_ROOMS);
   const [codOrders, setCodOrders] = useState<CodOrder[]>([]);
   const [chats, setChats] = useState<ChatThread[]>(INITIAL_CHATS);
-  const [accentColor, setAccentColor] = useState<string>("#a855f7");
+  const [themeId, setThemeIdState] = useState<ThemeId>("obsidian_gold");
+  const [accentColor, setAccentColor] = useState<string>(THEMES.obsidian_gold.primary);
+  const theme = THEMES[themeId] || THEMES.obsidian_gold;
+
+  function setThemeId(id: ThemeId) {
+    if (!THEMES[id]) return;
+    setThemeIdState(id);
+    setAccentColor(THEMES[id].primary);
+  }
   const [streakDays, setStreakDays] = useState<number>(1);
   const [lastStreakDate, setLastStreakDate] = useState<string>("");
   const [followingUserIds, setFollowingUserIds] = useState<string[]>(["u_1", "u_2"]);
@@ -487,7 +499,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           if (typeof cfg.marketEnabled === "boolean") setMarketEnabled(cfg.marketEnabled);
           if (typeof cfg.audioRoomsEnabled === "boolean") setAudioRoomsEnabled(cfg.audioRoomsEnabled);
           if (typeof cfg.devHudEnabled === "boolean") setDevHudEnabled(cfg.devHudEnabled);
-          if (typeof cfg.accentColor === "string") setAccentColor(cfg.accentColor);
+          if (typeof cfg.themeId === "string" && cfg.themeId in THEMES) {
+            setThemeIdState(cfg.themeId as ThemeId);
+            setAccentColor(THEMES[cfg.themeId as ThemeId].primary);
+          } else if (typeof cfg.accentColor === "string") {
+            setAccentColor(cfg.accentColor);
+          }
           if (typeof cfg.streakDays === "number") setStreakDays(cfg.streakDays);
           if (typeof cfg.lastStreakDate === "string") setLastStreakDate(cfg.lastStreakDate);
           if (Array.isArray(cfg.bannedWords)) setBannedWords(cfg.bannedWords);
@@ -518,6 +535,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         marketEnabled,
         audioRoomsEnabled,
         devHudEnabled,
+        themeId,
         accentColor,
         streakDays,
         lastStreakDate,
@@ -532,6 +550,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     marketEnabled,
     audioRoomsEnabled,
     devHudEnabled,
+    themeId,
     accentColor,
     streakDays,
     lastStreakDate,
@@ -1231,6 +1250,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         audioRooms,
         codOrders,
         chats: chats.filter((c) => !blockedUserIds.includes(c.user.id)),
+        themeId,
+        theme,
         accentColor,
         streakDays,
         claimedStreakToday,
@@ -1256,6 +1277,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         deleteAccount,
         updateProfile,
         togglePrivateAccount,
+        setThemeId,
         setAccentColor,
         claimDailyStreak,
         redeemReward,

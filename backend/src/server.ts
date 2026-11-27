@@ -101,7 +101,7 @@ let appVersionConfig = {
   latestVersion: "1.0.0",
   minVersion: "1.0.0",
   forceUpdate: false,
-  releaseNotes: "تحديث SHAHINAZ Ultra 3.0 — ستريك يومي ومتجر نقاط + استوديو الذكاء الاصطناعي + تفاعلات وهدايا + تتبع طلبات 58 ولاية + تحليلات صانع المحتوى",
+  releaseNotes: "تحديث SHAHINAZ Ultra 4.0 (Obsidian Couture) — هوية فاخرة فريدة بـ 4 ثيمات كاملة + شريط سفلي عائم + ستوري بطاقات + بطاقات زجاجية + ردود سريعة ومكتشف المبدعين",
   downloadUrl: "https://expo.dev/accounts/shahinaz-1994/projects/shahinaz-1994/builds",
 };
 

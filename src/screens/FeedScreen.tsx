@@ -21,15 +21,17 @@ import {
 import * as ImagePicker from "expo-image-picker";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { COLORS } from "../theme";
 import { useApp } from "../store/AppContext";
 import type { Post, ReactionEmoji, Story } from "../types";
 import AdminScreen from "./AdminScreen";
 import DevVaultModal from "../components/DevVaultModal";
 import DailyStreakModal from "../components/DailyStreakModal";
 import ShahinazAiModal from "../components/ShahinazAiModal";
+import ThemeStudioModal from "../components/ThemeStudioModal";
+import AuroraBackground from "../components/AuroraBackground";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const CARD_MEDIA_HEIGHT = Math.min(390, (SCREEN_WIDTH - 44) * 1.05);
 const REACTIONS: ReactionEmoji[] = ["❤️", "🔥", "😂", "😮", "😢"];
 const GIFT_TIERS = [
   { emoji: "🌹", label: "وردة", cost: 10 },
@@ -39,9 +41,15 @@ const GIFT_TIERS = [
 
 function PostMediaWithDoubleTap({
   imageUri,
+  location,
+  createdAt,
+  isSponsored,
   onDoubleTapLike,
 }: {
   imageUri: string;
+  location?: string;
+  createdAt: string;
+  isSponsored?: boolean;
   onDoubleTapLike: () => void;
 }) {
   const lastTapRef = useRef<number>(0);
@@ -57,7 +65,7 @@ function PostMediaWithDoubleTap({
       Animated.parallel([
         Animated.spring(scaleAnim, { toValue: 1.15, friction: 4, useNativeDriver: true }),
         Animated.sequence([
-          Animated.delay(450),
+          Animated.delay(420),
           Animated.timing(opacityAnim, { toValue: 0, duration: 280, useNativeDriver: true }),
         ]),
       ]).start();
@@ -69,6 +77,23 @@ function PostMediaWithDoubleTap({
     <TouchableWithoutFeedback onPress={handlePress}>
       <View style={styles.mediaWrap}>
         <Image source={{ uri: imageUri }} style={styles.postImage} resizeMode="cover" />
+        <LinearGradient
+          colors={["rgba(0,0,0,0.42)", "transparent", "rgba(0,0,0,0.52)"]}
+          style={StyleSheet.absoluteFillObject}
+          pointerEvents="none"
+        />
+        {(!!location || isSponsored) && (
+          <View style={styles.mediaFloatingTag}>
+            <Ionicons name={isSponsored ? "sparkles" : "location"} size={11} color="#FDE68A" />
+            <Text style={styles.mediaFloatingTagText}>
+              {location ? `${location}` : "مموّل ⭐"}
+              {isSponsored && location ? " · مموّل" : ""}
+            </Text>
+          </View>
+        )}
+        <View style={styles.mediaTimeBadge}>
+          <Text style={styles.mediaTimeText}>{createdAt}</Text>
+        </View>
         <Animated.View
           pointerEvents="none"
           style={[
@@ -79,7 +104,7 @@ function PostMediaWithDoubleTap({
             },
           ]}
         >
-          <Ionicons name="heart" size={96} color="#ffffff" />
+          <Ionicons name="heart" size={92} color="#ffffff" />
         </Animated.View>
       </View>
     </TouchableWithoutFeedback>
@@ -94,7 +119,7 @@ export default function FeedScreen() {
     stories,
     notifications,
     announcement,
-    accentColor,
+    theme,
     streakDays,
     claimedStreakToday,
     adminPin,
@@ -135,6 +160,7 @@ export default function FeedScreen() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [streakOpen, setStreakOpen] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
+  const [themeOpen, setThemeOpen] = useState(false);
   const [devVaultOpen, setDevVaultOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
   const [selectedAuthorId, setSelectedAuthorId] = useState<string | null>(null);
@@ -205,41 +231,39 @@ export default function FeedScreen() {
     );
   }
 
-  function handleSendComment(postId: string) {
-    const clean = commentText.trim();
-    if (!clean) return;
-    const role = currentUser?.role || "USER";
-    if (!rolePermissions[role]?.canComment) {
-      Alert.alert("الصلاحيات", "التعليق غير مفعّل لرتبتك الحالية من طرف الإدارة.");
-      return;
-    }
-    const foundBanned = bannedWords.find((w) => clean.toLowerCase().includes(w.toLowerCase()));
-    if (foundBanned) {
-      Alert.alert("محتوى غير مسموح", "يحتوي تعليقك على كلمة محظورة من فلتر الأمان التلقائي.");
-      return;
-    }
-    addComment(postId, clean);
-    setCommentText("");
-  }
-
   async function onRefresh() {
     setRefreshing(true);
     await refreshPosts();
     setRefreshing(false);
   }
 
+  function handleSendComment(postId: string) {
+    const role = currentUser?.role || "USER";
+    if (!rolePermissions[role]?.canComment) {
+      Alert.alert("الصلاحيات", "صلاحية التعليق غير مفعّلة لرتبتك الحالية من طرف الإدارة.");
+      return;
+    }
+    if (!commentText.trim()) return;
+    const foundBanned = bannedWords.find((w) => commentText.toLowerCase().includes(w.toLowerCase()));
+    if (foundBanned) {
+      Alert.alert("فلتر الأمان التلقائي 🛡️", "يحتوي تعليقك على كلمة محظورة من إدارة التطبيق.");
+      return;
+    }
+    addComment(postId, commentText);
+    setCommentText("");
+  }
+
   function openPostMenu(post: Post) {
-    Alert.alert("خيارات المنشور", "اختر إجراءً:", [
+    Alert.alert("خيارات المنشور", `منشور بواسطة ${post.author.name}`, [
       {
-        text: "🚩 الإبلاغ عن محتوى مسيء",
-        style: "destructive",
+        text: "🚩 إبلاغ عن محتوى مخالف",
         onPress: () => {
-          reportPost(post.id, "محتوى غير لائق");
-          Alert.alert("تم استلام البلاغ", "تم إخفاء المنشور وسيتم مراجعته خلال 24 ساعة.");
+          reportPost(post.id, "محتوى مخالف");
+          Alert.alert("شكراً لك", "تم استلام بلاغك وسيتم مراجعته فوراً.");
         },
       },
       {
-        text: `🚫 حظر ${post.author.name}`,
+        text: "🚫 حظر المستخدم",
         style: "destructive",
         onPress: () => {
           blockUser(post.author.id);
@@ -259,131 +283,175 @@ export default function FeedScreen() {
   }
 
   return (
-    <View style={styles.screen}>
+    <View style={[styles.screen, { backgroundColor: theme.bg }]}>
+      <AuroraBackground theme={theme} height={300} />
+
       <FlatList
         data={displayedPosts}
         keyExtractor={(item) => item.id}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={accentColor} />}
+        contentContainerStyle={{ paddingBottom: 18 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
         ListHeaderComponent={
           <View>
-            {/* Ultra-clean Instagram-grade Top Header */}
+            {/* SHAHINAZ Obsidian Couture Signature Top Header */}
             <View style={styles.header}>
               <TouchableOpacity
                 activeOpacity={0.9}
                 delayLongPress={1400}
                 onLongPress={() => setDevVaultOpen(true)}
+                style={styles.brandGroup}
               >
-                <Text style={styles.brand}>SHAHINAZ</Text>
+                <LinearGradient colors={theme.btnGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.brandCrest}>
+                  <Ionicons name="diamond" size={16} color={theme.btnText} />
+                </LinearGradient>
+                <View style={{ alignItems: "flex-end" }}>
+                  <Text style={[styles.brand, { color: theme.text }]}>SHAHINAZ</Text>
+                  <Text style={{ color: theme.primary, fontSize: 9, fontWeight: "900", letterSpacing: 1.5, marginTop: -2 }}>
+                    OBSIDIAN 4.0
+                  </Text>
+                </View>
               </TouchableOpacity>
+
               <View style={styles.headerRight}>
                 <TouchableOpacity
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 3,
-                    backgroundColor: "rgba(245,158,11,0.16)",
-                    borderColor: claimedStreakToday ? "rgba(245,158,11,0.35)" : COLORS.warn,
-                    borderWidth: 0.8,
-                    paddingHorizontal: 8,
-                    paddingVertical: 4,
-                    borderRadius: 999,
-                  }}
+                  style={[
+                    styles.streakPill,
+                    {
+                      backgroundColor: theme.primarySoft,
+                      borderColor: claimedStreakToday ? theme.border : theme.borderGlow,
+                    },
+                  ]}
                   onPress={() => setStreakOpen(true)}
                 >
-                  <Ionicons name="flame" size={14} color={COLORS.warn} />
-                  <Text style={{ color: COLORS.warn, fontSize: 11.5, fontWeight: "800" }}>{streakDays}</Text>
+                  <Ionicons name="flame" size={13} color={theme.primary} />
+                  <Text style={{ color: theme.primary, fontSize: 11.5, fontWeight: "900" }}>{streakDays}</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.iconBtn} onPress={() => setAiOpen(true)}>
-                  <Ionicons name="sparkles-outline" size={21} color={accentColor} />
-                </TouchableOpacity>
+
                 <TouchableOpacity
-                  style={styles.iconBtn}
+                  style={[styles.glassIconBtn, { backgroundColor: theme.surface, borderColor: theme.borderGlow }]}
+                  onPress={() => setThemeOpen(true)}
+                >
+                  <Ionicons name="color-palette-outline" size={18} color={theme.primary} />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.glassIconBtn, { backgroundColor: theme.surface, borderColor: theme.border }]}
+                  onPress={() => setAiOpen(true)}
+                >
+                  <Ionicons name="sparkles-outline" size={18} color={theme.primary} />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.glassIconBtn, { backgroundColor: theme.surface, borderColor: theme.border }]}
                   onPress={() => setSettingsOpen(true)}
                   accessibilityLabel="الإعدادات"
                 >
-                  <Ionicons name="settings-outline" size={22} color={COLORS.text} />
+                  <Ionicons name="settings-outline" size={18} color={theme.text} />
                 </TouchableOpacity>
+
                 <TouchableOpacity
-                  style={styles.iconBtn}
+                  style={[styles.glassIconBtn, { backgroundColor: theme.surface, borderColor: theme.border }]}
                   onPress={() => {
                     setNotifOpen(true);
                     markAllNotificationsRead();
                   }}
                   accessibilityLabel="الإشعارات"
                 >
-                  <Ionicons name="notifications-outline" size={23} color={COLORS.text} />
-                  {unreadNotifs > 0 && <View style={styles.redDot} />}
+                  <Ionicons name="notifications-outline" size={18} color={theme.text} />
+                  {unreadNotifs > 0 && <View style={[styles.redDot, { backgroundColor: theme.heart }]} />}
                 </TouchableOpacity>
               </View>
             </View>
 
             {!!announcement && (
-              <View style={styles.announceBox}>
-                <Ionicons name="megaphone-outline" size={16} color={COLORS.primary} />
-                <Text style={styles.announceText}>{announcement}</Text>
-              </View>
+              <LinearGradient
+                colors={theme.cardHighlight}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={[styles.announceBox, { borderColor: theme.borderGlow }]}
+              >
+                <Ionicons name="megaphone" size={15} color={theme.primary} />
+                <Text style={[styles.announceText, { color: theme.text }]}>{announcement}</Text>
+              </LinearGradient>
             )}
 
-            {/* Stories Strip with Real Portraits & Gradient Rings */}
+            {/* Signature SHAHINAZ Tall Squircle Portrait Story Cards */}
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.storiesRow}
-              style={styles.storiesBar}
             >
-              <TouchableOpacity style={styles.storyItem} onPress={() => setNewStoryOpen(true)}>
-                <View style={styles.myStoryWrap}>
+              {/* Add My Story Luxury Card */}
+              <TouchableOpacity
+                activeOpacity={0.88}
+                style={[styles.storyCardOuter, { borderColor: theme.borderGlow, backgroundColor: theme.surface }]}
+                onPress={() => setNewStoryOpen(true)}
+              >
+                <View style={styles.storyCardInner}>
                   {currentUser?.avatarUri ? (
-                    <Image source={{ uri: currentUser.avatarUri }} style={styles.storyAvatarImg} />
+                    <Image source={{ uri: currentUser.avatarUri }} style={styles.storyCardBg} resizeMode="cover" />
                   ) : (
-                    <View style={styles.storyAvatarFallback}>
-                      <Ionicons name="person" size={28} color={COLORS.muted} />
-                    </View>
+                    <LinearGradient colors={theme.coverGrad} style={styles.storyCardBg} />
                   )}
-                  <View style={styles.myStoryPlus}>
-                    <Ionicons name="add" size={15} color="#fff" />
-                  </View>
+                  <LinearGradient
+                    colors={["rgba(0,0,0,0.15)", "rgba(0,0,0,0.82)"]}
+                    style={StyleSheet.absoluteFillObject}
+                  />
+                  <LinearGradient colors={theme.btnGrad} style={styles.myStoryPlusOrb}>
+                    <Ionicons name="add" size={18} color={theme.btnText} />
+                  </LinearGradient>
+                  <Text style={styles.storyCardLabel}>قصتك</Text>
                 </View>
-                <Text style={styles.storyName}>قصتك</Text>
               </TouchableOpacity>
 
               {stories.map((st) => (
                 <TouchableOpacity
                   key={st.id}
-                  style={styles.storyItem}
+                  activeOpacity={0.88}
                   onPress={() => {
                     markStorySeen(st.id);
                     setActiveStory(st);
                   }}
                 >
                   <LinearGradient
-                    colors={!st.seen ? ["#feda75", "#fa7e1e", "#d62976", "#962fbf"] : ["#2e2e33", "#2e2e33"]}
+                    colors={!st.seen ? theme.storyGrad : [theme.border, theme.border]}
                     start={{ x: 0, y: 1 }}
                     end={{ x: 1, y: 0 }}
-                    style={styles.storyRingGrad}
+                    style={styles.storyCardFrame}
                   >
-                    <View style={styles.storyRingInner}>
-                      {st.avatarUri ? (
-                        <Image source={{ uri: st.avatarUri }} style={styles.storyAvatarImg} />
+                    <View style={[styles.storyCardInner, { backgroundColor: theme.bgAlt }]}>
+                      {st.imageUri ? (
+                        <Image source={{ uri: st.imageUri }} style={styles.storyCardBg} resizeMode="cover" />
                       ) : (
-                        <Text style={{ fontSize: 24 }}>{st.avatarEmoji}</Text>
+                        <LinearGradient colors={theme.coverGrad} style={styles.storyCardBg} />
                       )}
+                      <LinearGradient
+                        colors={["rgba(0,0,0,0.22)", "transparent", "rgba(0,0,0,0.85)"]}
+                        style={StyleSheet.absoluteFillObject}
+                      />
+                      <View style={[styles.storyMiniAvatarWrap, { borderColor: !st.seen ? theme.primary : theme.border }]}>
+                        {st.avatarUri ? (
+                          <Image source={{ uri: st.avatarUri }} style={styles.storyMiniAvatar} />
+                        ) : (
+                          <Text style={{ fontSize: 13 }}>{st.avatarEmoji}</Text>
+                        )}
+                      </View>
+                      <Text style={styles.storyCardLabel} numberOfLines={1}>
+                        {st.userName}
+                      </Text>
                     </View>
                   </LinearGradient>
-                  <Text style={styles.storyName} numberOfLines={1}>
-                    {st.userName}
-                  </Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
 
-            {/* SHAHINAZ Ultra 3.0 Smart Feed Switcher */}
-            <View style={styles.feedTabsBar}>
+            {/* Floating Frosted Segmented Feed Switcher */}
+            <View style={[styles.feedTabsCapsule, { backgroundColor: theme.surface, borderColor: theme.border }]}>
               {(
                 [
                   { id: "foryou", label: "لك ✨" },
-                  { id: "following", label: "المتابَعون 👥" },
+                  { id: "following", label: "المتابَعون" },
                   { id: "trending", label: "ترند 🔥" },
                 ] as const
               ).map((tab) => {
@@ -391,12 +459,17 @@ export default function FeedScreen() {
                 return (
                   <TouchableOpacity
                     key={tab.id}
-                    style={[styles.feedTabBtn, active && { borderBottomColor: accentColor }]}
+                    style={styles.feedTabTouch}
+                    activeOpacity={0.85}
                     onPress={() => setFeedMode(tab.id)}
                   >
-                    <Text style={[styles.feedTabText, active && { color: COLORS.text, fontWeight: "800" }]}>
-                      {tab.label}
-                    </Text>
+                    {active ? (
+                      <LinearGradient colors={theme.btnGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.feedTabActiveGrad}>
+                        <Text style={{ color: theme.btnText, fontSize: 12.5, fontWeight: "900" }}>{tab.label}</Text>
+                      </LinearGradient>
+                    ) : (
+                      <Text style={{ color: theme.muted, fontSize: 12.5, fontWeight: "700" }}>{tab.label}</Text>
+                    )}
                   </TouchableOpacity>
                 );
               })}
@@ -404,59 +477,69 @@ export default function FeedScreen() {
           </View>
         }
         renderItem={({ item }) => (
-          <View style={styles.postContainer}>
-            {/* Post Header */}
+          <View
+            style={[
+              styles.postCard,
+              {
+                backgroundColor: theme.surface,
+                borderColor: item.isPinned || item.isSponsored ? theme.borderGlow : theme.border,
+              },
+            ]}
+          >
+            {/* Card Author Header */}
             <View style={styles.postHeader}>
               <TouchableOpacity
                 style={styles.authorRow}
                 activeOpacity={0.8}
                 onPress={() => setSelectedAuthorId(item.author.id)}
               >
-                <LinearGradient
-                  colors={["#feda75", "#d62976", "#962fbf"]}
-                  style={styles.miniRing}
-                >
+                <LinearGradient colors={theme.storyGrad} style={styles.miniRing}>
                   {item.author.avatarUri ? (
                     <Image source={{ uri: item.author.avatarUri }} style={styles.postAvatar} />
                   ) : (
-                    <View style={styles.postAvatarFallback}>
+                    <View style={[styles.postAvatarFallback, { backgroundColor: theme.surface2 }]}>
                       <Text style={{ fontSize: 16 }}>{item.author.avatarEmoji}</Text>
                     </View>
                   )}
                 </LinearGradient>
                 <View style={{ alignItems: "flex-end" }}>
-                  <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 4 }}>
-                    <Text style={styles.authorName}>{item.author.name}</Text>
-                    {item.author.verified && <Ionicons name="checkmark-circle" size={14} color={COLORS.verified} />}
+                  <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 5 }}>
+                    <Text style={[styles.authorName, { color: theme.text }]}>{item.author.name}</Text>
+                    {item.author.verified && <Ionicons name="checkmark-circle" size={14} color={theme.verified} />}
                     {item.isPinned && (
-                      <View style={styles.pinnedPill}>
-                        <Text style={styles.pinnedPillText}>📌 مثبّت</Text>
+                      <View style={[styles.pinnedPill, { backgroundColor: theme.primarySoft }]}>
+                        <Text style={{ color: theme.primary, fontSize: 9.5, fontWeight: "900" }}>📌 مثبّت</Text>
                       </View>
                     )}
                   </View>
-                  <Text style={styles.postSub}>
-                    {item.location ? `${item.location} · ` : ""}
-                    {item.createdAt}
-                    {item.isSponsored ? " · مموّل" : ""}
+                  <Text style={{ color: theme.muted, fontSize: 11, marginTop: 1 }}>
+                    @{item.author.username} · {item.createdAt}
                   </Text>
                 </View>
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => openPostMenu(item)} style={styles.moreBtn}>
-                <Ionicons name="ellipsis-horizontal" size={20} color={COLORS.muted} />
+
+              <TouchableOpacity
+                onPress={() => openPostMenu(item)}
+                style={[styles.moreBtn, { backgroundColor: theme.surface2 }]}
+              >
+                <Ionicons name="ellipsis-horizontal" size={18} color={theme.muted} />
               </TouchableOpacity>
             </View>
 
-            {/* Full-Bleed Edge-to-Edge Media OR Gradient Text Card */}
+            {/* Caption above media if short or clean below — let's keep crisp caption below media, or full gradient card */}
             {!!item.imageUri ? (
               <PostMediaWithDoubleTap
                 imageUri={item.imageUri}
+                location={item.location}
+                createdAt={item.createdAt}
+                isSponsored={item.isSponsored}
                 onDoubleTapLike={() => {
                   if (!item.likedByMe) toggleLike(item.id);
                 }}
               />
             ) : item.bgColor ? (
               <LinearGradient
-                colors={[item.bgColor, "#111827"]}
+                colors={[item.bgColor, "#0B0E17"]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.coloredPostBox}
@@ -465,7 +548,55 @@ export default function FeedScreen() {
               </LinearGradient>
             ) : null}
 
-            {/* Clean Instagram Action Bar + Long-Press Reactions & Creator Gifts */}
+            {/* Caption & Interactive Poll */}
+            <View style={styles.captionWrap}>
+              {!!item.content && !item.bgColor && (
+                <Text style={[styles.captionText, { color: theme.text }]}>
+                  <Text style={{ fontWeight: "900", color: theme.primary }}>{item.author.name}  </Text>
+                  {item.content}
+                </Text>
+              )}
+
+              {item.poll && (
+                <View style={styles.pollWrap}>
+                  {(() => {
+                    const totalVotes = item.poll!.options.reduce((s, o) => s + o.votes, 0);
+                    return item.poll!.options.map((opt) => {
+                      const pct = totalVotes > 0 ? Math.round((opt.votes / totalVotes) * 100) : 0;
+                      const voted = item.poll!.votedOptionId === opt.id;
+                      return (
+                        <TouchableOpacity
+                          key={opt.id}
+                          style={[
+                            styles.pollOpt,
+                            { backgroundColor: theme.surface2, borderColor: voted ? theme.primary : theme.border },
+                          ]}
+                          onPress={() => votePoll(item.id, opt.id)}
+                        >
+                          {item.poll!.votedOptionId && (
+                            <View
+                              style={[
+                                StyleSheet.absoluteFillObject,
+                                { width: `${pct}%`, backgroundColor: theme.primarySoft, borderRadius: 12 },
+                              ]}
+                            />
+                          )}
+                          <Text style={{ color: theme.text, fontSize: 13, fontWeight: "700" }}>
+                            {voted ? "✓ " : ""}
+                            {opt.label}
+                          </Text>
+                          {item.poll!.votedOptionId && (
+                            <Text style={{ color: theme.primary, fontWeight: "900", fontSize: 12 }}>{pct}%</Text>
+                          )}
+                        </TouchableOpacity>
+                      );
+                    });
+                  })()}
+                </View>
+              )}
+            </View>
+
+            {/* Tactile Luxury Frosted Action Pills Bar */}
             <View style={styles.actionBar}>
               <View style={styles.actionLeft}>
                 <TouchableOpacity
@@ -474,62 +605,86 @@ export default function FeedScreen() {
                     setGiftPostId(null);
                     setReactionPostId(reactionPostId === item.id ? null : item.id);
                   }}
-                  delayLongPress={260}
-                  style={styles.actionIconBtn}
+                  delayLongPress={250}
+                  style={[
+                    styles.actionPill,
+                    {
+                      backgroundColor: item.likedByMe ? "rgba(251,55,91,0.16)" : theme.surface2,
+                      borderColor: item.likedByMe ? "rgba(251,55,91,0.45)" : theme.border,
+                    },
+                  ]}
                 >
                   {item.myReaction && item.myReaction !== "❤️" ? (
-                    <Text style={{ fontSize: 22, lineHeight: 26 }}>{item.myReaction}</Text>
+                    <Text style={{ fontSize: 16 }}>{item.myReaction}</Text>
                   ) : (
                     <Ionicons
                       name={item.likedByMe ? "heart" : "heart-outline"}
-                      size={26}
-                      color={item.likedByMe ? COLORS.heart : COLORS.text}
+                      size={18}
+                      color={item.likedByMe ? theme.heart : theme.text}
                     />
                   )}
+                  <Text style={{ color: item.likedByMe ? theme.heart : theme.text, fontSize: 12, fontWeight: "800" }}>
+                    {item.likes.toLocaleString("fr-DZ")}
+                  </Text>
                 </TouchableOpacity>
+
                 <TouchableOpacity
                   onPress={() => setCommentingPostId(commentingPostId === item.id ? null : item.id)}
-                  style={styles.actionIconBtn}
+                  style={[styles.actionPill, { backgroundColor: theme.surface2, borderColor: theme.border }]}
                 >
-                  <Ionicons name="chatbubble-outline" size={23} color={COLORS.text} />
+                  <Ionicons name="chatbubble-outline" size={16} color={theme.text} />
+                  <Text style={{ color: theme.text, fontSize: 12, fontWeight: "800" }}>{item.comments.length}</Text>
                 </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => Share.share({ message: `${item.author.name} على SHAHINAZ:\n${item.content}` })}
-                  style={styles.actionIconBtn}
-                >
-                  <Ionicons name="paper-plane-outline" size={23} color={COLORS.text} />
-                </TouchableOpacity>
+
                 <TouchableOpacity
                   onPress={() => {
                     setReactionPostId(null);
                     setGiftPostId(giftPostId === item.id ? null : item.id);
                   }}
-                  style={styles.actionIconBtn}
+                  style={[
+                    styles.actionPill,
+                    {
+                      backgroundColor: giftPostId === item.id ? theme.primarySoft : theme.surface2,
+                      borderColor: giftPostId === item.id ? theme.borderGlow : theme.border,
+                    },
+                  ]}
                 >
-                  <Ionicons
-                    name="gift-outline"
-                    size={22}
-                    color={giftPostId === item.id ? COLORS.warn : COLORS.text}
-                  />
+                  <Ionicons name="gift-outline" size={17} color={theme.primary} />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => Share.share({ message: `${item.author.name} على SHAHINAZ:\n${item.content}` })}
+                  style={[styles.actionPill, { backgroundColor: theme.surface2, borderColor: theme.border }]}
+                >
+                  <Ionicons name="paper-plane-outline" size={16} color={theme.text} />
                 </TouchableOpacity>
               </View>
 
-              <TouchableOpacity onPress={() => toggleSave(item.id)} style={styles.actionIconBtn}>
+              <TouchableOpacity
+                onPress={() => toggleSave(item.id)}
+                style={[
+                  styles.actionPill,
+                  {
+                    backgroundColor: item.savedByMe ? theme.primarySoft : theme.surface2,
+                    borderColor: item.savedByMe ? theme.borderGlow : theme.border,
+                  },
+                ]}
+              >
                 <Ionicons
                   name={item.savedByMe ? "bookmark" : "bookmark-outline"}
-                  size={24}
-                  color={item.savedByMe ? accentColor : COLORS.text}
+                  size={17}
+                  color={item.savedByMe ? theme.primary : theme.text}
                 />
               </TouchableOpacity>
             </View>
 
             {/* Floating 5-Emoji Multi-Reaction Picker */}
             {reactionPostId === item.id && (
-              <View style={styles.reactionPill}>
+              <View style={[styles.reactionPill, { backgroundColor: theme.bgAlt, borderColor: theme.borderGlow }]}>
                 {REACTIONS.map((em) => (
                   <TouchableOpacity
                     key={em}
-                    style={[styles.reactionItem, item.myReaction === em && { backgroundColor: "rgba(168,85,247,0.28)" }]}
+                    style={[styles.reactionItem, item.myReaction === em && { backgroundColor: theme.primarySoft }]}
                     onPress={() => {
                       setReaction(item.id, em);
                       setReactionPostId(null);
@@ -543,15 +698,15 @@ export default function FeedScreen() {
 
             {/* Quick Creator Gift Strip */}
             {giftPostId === item.id && (
-              <View style={styles.giftStrip}>
-                <Text style={{ color: COLORS.warn, fontSize: 11.5, fontWeight: "800", textAlign: "right", marginBottom: 6 }}>
+              <View style={[styles.giftStrip, { backgroundColor: theme.bgAlt, borderColor: theme.borderGlow }]}>
+                <Text style={{ color: theme.primary, fontSize: 11.5, fontWeight: "800", textAlign: "right", marginBottom: 8 }}>
                   🎁 ادعم {item.author.name} بهدية فورية (رصيدك: {currentUser?.points ?? 150} 🪙)
                 </Text>
                 <View style={{ flexDirection: "row-reverse", gap: 8 }}>
                   {GIFT_TIERS.map((g) => (
                     <TouchableOpacity
                       key={g.emoji}
-                      style={styles.giftBtn}
+                      style={[styles.giftBtn, { backgroundColor: theme.surface2, borderColor: theme.border }]}
                       onPress={() => {
                         const res = sendPostGift(item.id, g.emoji, g.cost);
                         setGiftPostId(null);
@@ -566,105 +721,61 @@ export default function FeedScreen() {
                       }}
                     >
                       <Text style={{ fontSize: 20 }}>{g.emoji}</Text>
-                      <Text style={{ color: COLORS.text, fontSize: 11, fontWeight: "700" }}>{g.label}</Text>
-                      <Text style={{ color: COLORS.warn, fontSize: 10.5, fontWeight: "800" }}>{g.cost} 🪙</Text>
+                      <Text style={{ color: theme.text, fontSize: 11, fontWeight: "800" }}>{g.label}</Text>
+                      <Text style={{ color: theme.primary, fontSize: 10.5, fontWeight: "900" }}>{g.cost} 🪙</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
               </View>
             )}
 
-            {/* Likes & Caption */}
-            <View style={styles.captionWrap}>
-              <Text style={styles.likesText}>{item.likes.toLocaleString("fr-DZ")} إعجاب</Text>
-
-              {!!item.content && !item.bgColor && (
-                <Text style={styles.captionText}>
-                  <Text style={styles.captionAuthor}>{item.author.name}  </Text>
-                  {item.content}
-                </Text>
-              )}
-
-              {/* Interactive Poll if present */}
-              {item.poll && (
-                <View style={styles.pollWrap}>
-                  {(() => {
-                    const totalVotes = item.poll!.options.reduce((s, o) => s + o.votes, 0);
-                    return item.poll!.options.map((opt) => {
-                      const pct = totalVotes > 0 ? Math.round((opt.votes / totalVotes) * 100) : 0;
-                      const voted = item.poll!.votedOptionId === opt.id;
-                      return (
-                        <TouchableOpacity
-                          key={opt.id}
-                          style={[styles.pollOpt, voted && styles.pollOptVoted]}
-                          onPress={() => votePoll(item.id, opt.id)}
-                        >
-                          <Text style={styles.pollOptText}>
-                            {voted ? "✓ " : ""}
-                            {opt.label}
-                          </Text>
-                          {item.poll!.votedOptionId && <Text style={styles.pollPct}>{pct}%</Text>}
-                        </TouchableOpacity>
-                      );
-                    });
-                  })()}
+            {/* Inline Comments Section */}
+            {commentingPostId === item.id && (
+              <View style={[styles.commentsBox, { borderTopColor: theme.border }]}>
+                {item.comments.map((c) => (
+                  <Text key={c.id} style={[styles.commentLine, { color: theme.text }]}>
+                    <Text style={{ fontWeight: "900", color: theme.primary }}>{c.userName} </Text>
+                    {c.text}
+                  </Text>
+                ))}
+                <View style={[styles.commentInputRow, { backgroundColor: theme.surface2, borderColor: theme.border }]}>
+                  <TextInput
+                    style={[styles.commentInput, { color: theme.text }]}
+                    placeholder="اكتب تعليقاً راقياً..."
+                    placeholderTextColor={theme.muted}
+                    value={commentText}
+                    onChangeText={setCommentText}
+                  />
+                  <TouchableOpacity onPress={() => handleSendComment(item.id)}>
+                    <Text style={{ color: theme.primary, fontWeight: "900", fontSize: 13 }}>نشر</Text>
+                  </TouchableOpacity>
                 </View>
-              )}
-
-              {item.comments.length > 0 && commentingPostId !== item.id && (
-                <TouchableOpacity onPress={() => setCommentingPostId(item.id)}>
-                  <Text style={styles.viewComments}>عرض كل التعليقات ({item.comments.length})</Text>
-                </TouchableOpacity>
-              )}
-
-              {/* Inline Comments */}
-              {commentingPostId === item.id && (
-                <View style={styles.commentsBox}>
-                  {item.comments.map((c) => (
-                    <Text key={c.id} style={styles.commentLine}>
-                      <Text style={styles.commentUser}>{c.userName} </Text>
-                      {c.text}
-                    </Text>
-                  ))}
-                  <View style={styles.commentInputRow}>
-                    <TextInput
-                      style={styles.commentInput}
-                      placeholder="أضف تعليقاً..."
-                      placeholderTextColor={COLORS.muted}
-                      value={commentText}
-                      onChangeText={setCommentText}
-                    />
-                    <TouchableOpacity onPress={() => handleSendComment(item.id)}>
-                      <Text style={{ color: COLORS.verified, fontWeight: "700", fontSize: 13 }}>نشر</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              )}
-            </View>
+              </View>
+            )}
           </View>
         )}
       />
 
-      {/* Full-Screen Animated Instagram Story Viewer */}
+      {/* Full-Screen Animated Story Viewer */}
       <Modal visible={!!activeStory} animationType="fade" onRequestClose={() => setActiveStory(null)}>
         <TouchableWithoutFeedback onPress={() => setActiveStory(null)}>
           <View style={styles.fullStoryScreen}>
             {activeStory?.imageUri ? (
               <Image source={{ uri: activeStory.imageUri }} style={styles.fullStoryBg} resizeMode="cover" />
             ) : (
-              <LinearGradient colors={["#6d28d9", "#ec4899"]} style={styles.fullStoryBg} />
+              <LinearGradient colors={theme.coverGrad} style={styles.fullStoryBg} />
             )}
             <LinearGradient
-              colors={["rgba(0,0,0,0.65)", "transparent", "rgba(0,0,0,0.8)"]}
+              colors={["rgba(0,0,0,0.65)", "transparent", "rgba(0,0,0,0.84)"]}
               style={StyleSheet.absoluteFillObject}
             />
 
-            {/* Animated Progress Bar */}
             <View style={styles.storyProgressTrack}>
               <Animated.View
                 style={[
                   styles.storyProgressFill,
                   {
+                    backgroundColor: theme.primary,
                     width: storyProgress.interpolate({
                       inputRange: [0, 1],
                       outputRange: ["0%", "100%"],
@@ -674,7 +785,6 @@ export default function FeedScreen() {
               />
             </View>
 
-            {/* Story Top Author */}
             {activeStory && (
               <View style={styles.fullStoryTop}>
                 <View style={styles.authorRow}>
@@ -691,11 +801,10 @@ export default function FeedScreen() {
               </View>
             )}
 
-            {/* Story Caption Overlay + Quick Emoji Reactions */}
             <View style={styles.fullStoryCaptionBox}>
               {!!activeStory?.text && <Text style={styles.fullStoryCaption}>{activeStory.text}</Text>}
               {!!storyReactionMsg && (
-                <Text style={{ color: "#fde68a", textAlign: "center", fontWeight: "700", fontSize: 13, marginTop: 8 }}>
+                <Text style={{ color: theme.primary, textAlign: "center", fontWeight: "800", fontSize: 13, marginTop: 8 }}>
                   {storyReactionMsg}
                 </Text>
               )}
@@ -703,14 +812,7 @@ export default function FeedScreen() {
                 {["❤️", "🔥", "👏", "😍"].map((em) => (
                   <TouchableOpacity
                     key={em}
-                    style={{
-                      width: 44,
-                      height: 44,
-                      borderRadius: 22,
-                      backgroundColor: "rgba(255,255,255,0.16)",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
+                    style={styles.storyReactBtn}
                     onPress={() => {
                       setStoryReactionMsg(`تم إرسال ${em} إلى ${activeStory?.userName}`);
                       setTimeout(() => setStoryReactionMsg(""), 1400);
@@ -728,22 +830,22 @@ export default function FeedScreen() {
       {/* New Story Composer Modal */}
       <Modal visible={newStoryOpen} transparent animationType="slide" onRequestClose={() => setNewStoryOpen(false)}>
         <View style={styles.modalBackdrop}>
-          <View style={styles.modalBox}>
-            <Text style={styles.modalTitle}>✨ إضافة قصة جديدة</Text>
+          <View style={[styles.modalBox, { backgroundColor: theme.bgAlt, borderColor: theme.borderGlow }]}>
+            <Text style={[styles.modalTitle, { color: theme.text }]}>✨ إضافة قصة جديدة</Text>
             <TextInput
-              style={styles.modalInput}
+              style={[styles.modalInput, { backgroundColor: theme.surface2, color: theme.text, borderColor: theme.border }]}
               placeholder="اكتب تعليقاً لقصتك..."
-              placeholderTextColor={COLORS.muted}
+              placeholderTextColor={theme.muted}
               value={storyText}
               onChangeText={setStoryText}
             />
-            {storyImg && <Image source={{ uri: storyImg }} style={{ width: "100%", height: 180, borderRadius: 12, marginBottom: 10 }} />}
+            {storyImg && <Image source={{ uri: storyImg }} style={{ width: "100%", height: 180, borderRadius: 16, marginBottom: 10 }} />}
             <View style={{ flexDirection: "row-reverse", gap: 8 }}>
-              <TouchableOpacity style={styles.outlineBtn} onPress={pickStoryImage}>
-                <Text style={{ color: "#fff", fontWeight: "700" }}>🖼️ صورة</Text>
+              <TouchableOpacity style={[styles.outlineBtn, { backgroundColor: theme.surface2 }]} onPress={pickStoryImage}>
+                <Text style={{ color: theme.text, fontWeight: "800" }}>🖼️ صورة</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={styles.primaryBtn}
+                style={{ flex: 1 }}
                 onPress={() => {
                   if (!storyText.trim() && !storyImg) {
                     Alert.alert("تنبيه", "اكتب تعليقاً أو اختر صورة لقصتك أولاً.");
@@ -755,11 +857,13 @@ export default function FeedScreen() {
                   setNewStoryOpen(false);
                 }}
               >
-                <Text style={{ color: "#fff", fontWeight: "700" }}>نشر القصة</Text>
+                <LinearGradient colors={theme.btnGrad} style={styles.primaryBtn}>
+                  <Text style={{ color: theme.btnText, fontWeight: "900" }}>نشر القصة</Text>
+                </LinearGradient>
               </TouchableOpacity>
             </View>
             <TouchableOpacity style={{ marginTop: 12, alignItems: "center" }} onPress={() => setNewStoryOpen(false)}>
-              <Text style={{ color: COLORS.muted }}>إلغاء</Text>
+              <Text style={{ color: theme.muted, fontWeight: "700" }}>إلغاء</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -768,91 +872,91 @@ export default function FeedScreen() {
       {/* Notifications Sheet */}
       <Modal visible={notifOpen} transparent animationType="slide" onRequestClose={() => setNotifOpen(false)}>
         <View style={styles.modalBackdrop}>
-          <View style={styles.modalBox}>
-            <Text style={styles.modalTitle}>🔔 النشاط والإشعارات</Text>
+          <View style={[styles.modalBox, { backgroundColor: theme.bgAlt, borderColor: theme.borderGlow }]}>
+            <Text style={[styles.modalTitle, { color: theme.text }]}>🔔 النشاط والإشعارات</Text>
             <ScrollView style={{ maxHeight: 340 }} showsVerticalScrollIndicator={false}>
               {notifications.map((n) => (
-                <View key={n.id} style={styles.notifRow}>
+                <View key={n.id} style={[styles.notifRow, { borderBottomColor: theme.border }]}>
                   <Text style={{ fontSize: 18 }}>{n.emoji}</Text>
                   <View style={{ flex: 1, alignItems: "flex-end" }}>
-                    <Text style={{ color: COLORS.text, fontSize: 13, textAlign: "right" }}>{n.text}</Text>
-                    <Text style={{ color: COLORS.muted, fontSize: 11 }}>{n.time}</Text>
+                    <Text style={{ color: theme.text, fontSize: 13, textAlign: "right" }}>{n.text}</Text>
+                    <Text style={{ color: theme.muted, fontSize: 11 }}>{n.time}</Text>
                   </View>
                 </View>
               ))}
             </ScrollView>
-            <TouchableOpacity style={[styles.primaryBtn, { flex: 0, marginTop: 14 }]} onPress={() => setNotifOpen(false)}>
-              <Text style={{ color: "#fff", fontWeight: "700" }}>إغلاق</Text>
+            <TouchableOpacity activeOpacity={0.88} onPress={() => setNotifOpen(false)} style={{ marginTop: 14 }}>
+              <LinearGradient colors={theme.btnGrad} style={[styles.primaryBtn, { flex: 0 }]}>
+                <Text style={{ color: theme.btnText, fontWeight: "900" }}>إغلاق</Text>
+              </LinearGradient>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
 
-      {/* Author Quick-Profile Modal (Opened by tapping any creator avatar/name) */}
+      {/* Author Quick-Profile Modal */}
       <Modal visible={!!selectedAuthor} transparent animationType="fade" onRequestClose={() => setSelectedAuthorId(null)}>
         <View style={styles.modalBackdrop}>
           {selectedAuthor && (
-            <View style={styles.modalBox}>
+            <View style={[styles.modalBox, { backgroundColor: theme.bgAlt, borderColor: theme.borderGlow }]}>
               <View style={{ flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                <Text style={{ color: COLORS.muted, fontSize: 12 }}>@{selectedAuthor.username}</Text>
+                <Text style={{ color: theme.primary, fontSize: 12.5, fontWeight: "800" }}>@{selectedAuthor.username}</Text>
                 <TouchableOpacity onPress={() => setSelectedAuthorId(null)}>
-                  <Ionicons name="close" size={24} color={COLORS.text} />
+                  <Ionicons name="close" size={24} color={theme.text} />
                 </TouchableOpacity>
               </View>
               <View style={{ alignItems: "center", gap: 8 }}>
-                {selectedAuthor.avatarUri ? (
-                  <Image source={{ uri: selectedAuthor.avatarUri }} style={{ width: 76, height: 76, borderRadius: 38 }} />
-                ) : (
-                  <View style={{ width: 76, height: 76, borderRadius: 38, backgroundColor: COLORS.surface2, alignItems: "center", justifyContent: "center" }}>
-                    <Text style={{ fontSize: 32 }}>{selectedAuthor.avatarEmoji}</Text>
-                  </View>
-                )}
+                <LinearGradient colors={theme.storyGrad} style={{ width: 82, height: 82, borderRadius: 28, padding: 3 }}>
+                  {selectedAuthor.avatarUri ? (
+                    <Image source={{ uri: selectedAuthor.avatarUri }} style={{ width: "100%", height: "100%", borderRadius: 25 }} />
+                  ) : (
+                    <View style={{ flex: 1, borderRadius: 25, backgroundColor: theme.surface2, alignItems: "center", justifyContent: "center" }}>
+                      <Text style={{ fontSize: 32 }}>{selectedAuthor.avatarEmoji}</Text>
+                    </View>
+                  )}
+                </LinearGradient>
                 <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 5 }}>
-                  <Text style={{ color: COLORS.text, fontSize: 17, fontWeight: "800" }}>{selectedAuthor.name}</Text>
-                  {selectedAuthor.verified && <Ionicons name="checkmark-circle" size={16} color={COLORS.verified} />}
+                  <Text style={{ color: theme.text, fontSize: 17, fontWeight: "900" }}>{selectedAuthor.name}</Text>
+                  {selectedAuthor.verified && <Ionicons name="checkmark-circle" size={16} color={theme.verified} />}
                 </View>
                 {!!selectedAuthor.bio && (
-                  <Text style={{ color: COLORS.muted, fontSize: 13, textAlign: "center" }}>{selectedAuthor.bio}</Text>
+                  <Text style={{ color: theme.muted, fontSize: 13, textAlign: "center" }}>{selectedAuthor.bio}</Text>
                 )}
-                <View style={{ flexDirection: "row-reverse", gap: 24, marginVertical: 8 }}>
+                <View style={{ flexDirection: "row-reverse", gap: 28, marginVertical: 8 }}>
                   <View style={{ alignItems: "center" }}>
-                    <Text style={{ color: COLORS.text, fontWeight: "800", fontSize: 16 }}>
+                    <Text style={{ color: theme.text, fontWeight: "900", fontSize: 16 }}>
                       {selectedAuthor.followers.toLocaleString("fr-DZ")}
                     </Text>
-                    <Text style={{ color: COLORS.muted, fontSize: 11.5 }}>متابِع</Text>
+                    <Text style={{ color: theme.muted, fontSize: 11.5 }}>متابِع</Text>
                   </View>
                   <View style={{ alignItems: "center" }}>
-                    <Text style={{ color: COLORS.text, fontWeight: "800", fontSize: 16 }}>{selectedAuthor.following}</Text>
-                    <Text style={{ color: COLORS.muted, fontSize: 11.5 }}>يتابِع</Text>
+                    <Text style={{ color: theme.text, fontWeight: "900", fontSize: 16 }}>{selectedAuthor.following}</Text>
+                    <Text style={{ color: theme.muted, fontSize: 11.5 }}>يتابِع</Text>
                   </View>
                 </View>
 
                 {selectedAuthor.id !== currentUser?.id && (
                   <View style={{ flexDirection: "row-reverse", gap: 8, width: "100%", marginTop: 6 }}>
-                    <TouchableOpacity
-                      style={[
-                        styles.primaryBtn,
-                        {
-                          backgroundColor: followingUserIds.includes(selectedAuthor.id)
-                            ? COLORS.surface2
-                            : COLORS.verified,
-                        },
-                      ]}
-                      onPress={() => toggleFollowUser(selectedAuthor.id)}
-                    >
-                      <Text style={{ color: "#fff", fontWeight: "800" }}>
-                        {followingUserIds.includes(selectedAuthor.id) ? "متابَع ✓" : "متابعة +"}
-                      </Text>
+                    <TouchableOpacity style={{ flex: 1 }} onPress={() => toggleFollowUser(selectedAuthor.id)}>
+                      {followingUserIds.includes(selectedAuthor.id) ? (
+                        <View style={[styles.outlineBtn, { backgroundColor: theme.surface2 }]}>
+                          <Text style={{ color: theme.text, fontWeight: "800" }}>متابَع ✓</Text>
+                        </View>
+                      ) : (
+                        <LinearGradient colors={theme.btnGrad} style={styles.primaryBtn}>
+                          <Text style={{ color: theme.btnText, fontWeight: "900" }}>متابعة +</Text>
+                        </LinearGradient>
+                      )}
                     </TouchableOpacity>
                     <TouchableOpacity
-                      style={[styles.outlineBtn, { borderWidth: 0.8, borderColor: COLORS.danger }]}
+                      style={[styles.outlineBtn, { backgroundColor: theme.surface2, borderWidth: 0.8, borderColor: theme.danger }]}
                       onPress={() => {
                         blockUser(selectedAuthor.id);
                         setSelectedAuthorId(null);
                         Alert.alert("تم الحظر", `تم حظر ${selectedAuthor.name} بنجاح.`);
                       }}
                     >
-                      <Text style={{ color: COLORS.danger, fontWeight: "700" }}>حظر 🚫</Text>
+                      <Text style={{ color: theme.danger, fontWeight: "800" }}>حظر 🚫</Text>
                     </TouchableOpacity>
                   </View>
                 )}
@@ -862,98 +966,104 @@ export default function FeedScreen() {
         </View>
       </Modal>
 
-      {/* AMOLED Quick Settings Sheet (Opened from ⚙️ next to Notifications Bell) */}
+      {/* Luxury Quick Settings Sheet */}
       <Modal visible={settingsOpen} transparent animationType="slide" onRequestClose={() => setSettingsOpen(false)}>
         <View style={styles.sheetBackdrop}>
-          <View style={styles.settingsSheet}>
+          <View style={[styles.settingsSheet, { backgroundColor: theme.bgAlt, borderColor: theme.borderGlow }]}>
             <View style={styles.sheetHandle} />
             <View style={styles.settingsHeader}>
               <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 8 }}>
-                <Ionicons name="settings-outline" size={20} color={COLORS.primary} />
-                <Text style={styles.settingsTitle}>الإعدادات والخصوصية</Text>
+                <Ionicons name="settings-outline" size={20} color={theme.primary} />
+                <Text style={[styles.settingsTitle, { color: theme.text }]}>الإعدادات والخصوصية</Text>
               </View>
-              <TouchableOpacity onPress={() => setSettingsOpen(false)} style={styles.sheetCloseBtn}>
-                <Ionicons name="close" size={20} color={COLORS.text} />
+              <TouchableOpacity onPress={() => setSettingsOpen(false)} style={[styles.sheetCloseBtn, { backgroundColor: theme.surface2 }]}>
+                <Ionicons name="close" size={20} color={theme.text} />
               </TouchableOpacity>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingBottom: 14 }}>
-              {/* User Mini Card */}
               {currentUser && (
-                <View style={styles.accountMiniCard}>
+                <View style={[styles.accountMiniCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                   {currentUser.avatarUri ? (
                     <Image source={{ uri: currentUser.avatarUri }} style={styles.miniAvatar} />
                   ) : (
-                    <View style={styles.miniAvatarFallback}>
-                      <Ionicons name="person" size={22} color={COLORS.muted} />
+                    <View style={[styles.miniAvatarFallback, { backgroundColor: theme.surface2 }]}>
+                      <Ionicons name="person" size={22} color={theme.muted} />
                     </View>
                   )}
                   <View style={{ flex: 1, alignItems: "flex-end" }}>
                     <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 5 }}>
-                      <Text style={{ color: COLORS.text, fontWeight: "800", fontSize: 15 }}>{currentUser.name}</Text>
-                      {currentUser.verified && <Ionicons name="checkmark-circle" size={15} color={COLORS.verified} />}
+                      <Text style={{ color: theme.text, fontWeight: "900", fontSize: 15 }}>{currentUser.name}</Text>
+                      {currentUser.verified && <Ionicons name="checkmark-circle" size={15} color={theme.verified} />}
                     </View>
-                    <Text style={{ color: COLORS.muted, fontSize: 12 }}>
-                      @{currentUser.username} · 🏆 {currentUser.points ?? 150} نقطة
+                    <Text style={{ color: theme.muted, fontSize: 12 }}>
+                      @{currentUser.username} · 🪙 {currentUser.points ?? 150} نقطة
                     </Text>
                   </View>
                 </View>
               )}
 
-              {/* Private Account Toggle (Full-row tappable) */}
-              <TouchableOpacity activeOpacity={0.8} style={styles.settingRow} onPress={togglePrivateAccount}>
-                <Switch value={!!currentUser?.isPrivate} onValueChange={togglePrivateAccount} />
-                <View style={{ flex: 1, alignItems: "flex-end", paddingLeft: 10 }}>
-                  <Text style={styles.settingTitle}>حساب خاص (Private)</Text>
-                  <Text style={styles.settingSub}>فقط المتابعون الموافق عليهم يشاهدون منشوراتك</Text>
+              {/* Direct Luxury Skin Selector */}
+              <TouchableOpacity
+                activeOpacity={0.85}
+                style={[styles.settingRow, { backgroundColor: theme.surface, borderColor: theme.borderGlow }]}
+                onPress={() => {
+                  setSettingsOpen(false);
+                  setTimeout(() => setThemeOpen(true), 220);
+                }}
+              >
+                <Ionicons name="chevron-back" size={18} color={theme.primary} />
+                <View style={{ flex: 1, alignItems: "flex-end" }}>
+                  <Text style={[styles.settingTitle, { color: theme.text }]}>🎨 استوديو المظهر والألوان الملكية</Text>
+                  <Text style={[styles.settingSub, { color: theme.primary }]}>
+                    الحالي: {theme.emoji} {theme.name}
+                  </Text>
                 </View>
               </TouchableOpacity>
 
-              {/* Privacy Policy & Safety Standards */}
               <TouchableOpacity
                 activeOpacity={0.8}
-                style={styles.settingRow}
+                style={[styles.settingRow, { backgroundColor: theme.surface, borderColor: theme.border }]}
+                onPress={togglePrivateAccount}
+              >
+                <Switch value={!!currentUser?.isPrivate} onValueChange={togglePrivateAccount} />
+                <View style={{ flex: 1, alignItems: "flex-end", paddingLeft: 10 }}>
+                  <Text style={[styles.settingTitle, { color: theme.text }]}>حساب خاص (Private)</Text>
+                  <Text style={[styles.settingSub, { color: theme.muted }]}>فقط المتابعون الموافق عليهم يشاهدون منشوراتك</Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                activeOpacity={0.8}
+                style={[styles.settingRow, { backgroundColor: theme.surface, borderColor: theme.border }]}
                 onPress={() =>
                   Linking.openURL("https://amreamre741-pixel.github.io/SHAHINAZ/privacy.html").catch(() =>
                     Alert.alert("سياسة الخصوصية", "نحمي بياناتك بالكامل وفق معايير Google Play ومعايير سلامة المجتمع.")
                   )
                 }
               >
-                <Ionicons name="chevron-back" size={18} color={COLORS.muted} />
+                <Ionicons name="chevron-back" size={18} color={theme.muted} />
                 <View style={{ flex: 1, alignItems: "flex-end" }}>
-                  <Text style={styles.settingTitle}>سياسة الخصوصية وشروط الاستخدام</Text>
-                  <Text style={styles.settingSub}>معايير الأمان وحماية البيانات (Google Play)</Text>
+                  <Text style={[styles.settingTitle, { color: theme.text }]}>سياسة الخصوصية وشروط الاستخدام</Text>
+                  <Text style={[styles.settingSub, { color: theme.muted }]}>معايير الأمان وحماية البيانات (Google Play)</Text>
                 </View>
               </TouchableOpacity>
 
-              {/* App Theme & Connection Status */}
-              <View style={styles.settingRow}>
-                <View style={styles.onlinePill}>
-                  <View style={styles.onlineDot} />
-                  <Text style={{ color: COLORS.success, fontSize: 11, fontWeight: "700" }}>متصل</Text>
-                </View>
-                <View style={{ flex: 1, alignItems: "flex-end" }}>
-                  <Text style={styles.settingTitle}>المظهر الليلي AMOLED</Text>
-                  <Text style={styles.settingSub}>أسود فاحم موفّر للبطارية · جودة عالية</Text>
-                </View>
-              </View>
-
-              {/* Blocked Users */}
-              <View style={styles.settingBlockCard}>
+              <View style={[styles.settingBlockCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                 <View style={{ flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center" }}>
-                  <Text style={styles.settingTitle}>المستخدمون المحظورون</Text>
-                  <Text style={{ color: COLORS.muted, fontWeight: "700", fontSize: 13 }}>{blockedUserIds.length}</Text>
+                  <Text style={[styles.settingTitle, { color: theme.text }]}>المستخدمون المحظورون</Text>
+                  <Text style={{ color: theme.muted, fontWeight: "700", fontSize: 13 }}>{blockedUserIds.length}</Text>
                 </View>
                 {blockedUserIds.length > 0 && (
                   <View style={{ marginTop: 8, gap: 6 }}>
                     {blockedUserIds.map((uid) => {
                       const u = allUsers.find((x) => x.id === uid);
                       return (
-                        <View key={uid} style={styles.blockedItem}>
+                        <View key={uid} style={[styles.blockedItem, { borderTopColor: theme.border }]}>
                           <TouchableOpacity onPress={() => unblockUser(uid)}>
-                            <Text style={{ color: COLORS.verified, fontSize: 12, fontWeight: "700" }}>إلغاء الحظر</Text>
+                            <Text style={{ color: theme.primary, fontSize: 12, fontWeight: "800" }}>إلغاء الحظر</Text>
                           </TouchableOpacity>
-                          <Text style={{ color: COLORS.text, fontSize: 12.5 }}>{u ? u.name : uid}</Text>
+                          <Text style={{ color: theme.text, fontSize: 12.5 }}>{u ? u.name : uid}</Text>
                         </View>
                       );
                     })}
@@ -961,39 +1071,35 @@ export default function FeedScreen() {
                 )}
               </View>
 
-              {/* Logout & Delete Account */}
               <TouchableOpacity
-                style={styles.logoutBtn}
+                style={[styles.logoutBtn, { backgroundColor: theme.surface2 }]}
                 onPress={() => {
                   setSettingsOpen(false);
                   logout();
                 }}
               >
-                <Ionicons name="log-out-outline" size={18} color={COLORS.text} />
-                <Text style={{ color: COLORS.text, fontWeight: "700", fontSize: 14 }}>تسجيل الخروج</Text>
+                <Ionicons name="log-out-outline" size={18} color={theme.text} />
+                <Text style={{ color: theme.text, fontWeight: "800", fontSize: 14 }}>تسجيل الخروج</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity style={styles.dangerBtn} onPress={confirmDeleteFromSettings}>
-                <Ionicons name="trash-outline" size={18} color={COLORS.danger} />
-                <Text style={{ color: COLORS.danger, fontWeight: "700", fontSize: 14 }}>حذف الحساب نهائياً</Text>
+              <TouchableOpacity style={[styles.dangerBtn, { borderColor: theme.danger }]} onPress={confirmDeleteFromSettings}>
+                <Ionicons name="trash-outline" size={18} color={theme.danger} />
+                <Text style={{ color: theme.danger, fontWeight: "800", fontSize: 14 }}>حذف الحساب نهائياً</Text>
               </TouchableOpacity>
 
-              {/* Stealth 5-Tap Developer Entry Footer (100% invisible to normal users) */}
+              {/* Stealth 5-Tap Developer Entry Footer */}
               <TouchableOpacity activeOpacity={0.7} onPress={handleSecretVersionTap} style={styles.versionFooter}>
-                <Text style={styles.versionText}>SHAHINAZ Ultra 3.0 · OTA Live</Text>
+                <Text style={[styles.versionText, { color: theme.muted }]}>SHAHINAZ Ultra 4.0 · Obsidian Couture</Text>
               </TouchableOpacity>
             </ScrollView>
           </View>
         </View>
       </Modal>
 
-      {/* Daily Login Streak, Coin Store & Accent Theme Picker */}
       <DailyStreakModal visible={streakOpen} onClose={() => setStreakOpen(false)} />
-
-      {/* SHAHINAZ AI Studio (Copywriter, Viral Reels, Hashtags, DZD Profit Calculator) */}
       <ShahinazAiModal visible={aiOpen} onClose={() => setAiOpen(false)} />
+      <ThemeStudioModal visible={themeOpen} onClose={() => setThemeOpen(false)} />
 
-      {/* Encrypted Developer Vault PIN Keypad */}
       <DevVaultModal
         visible={devVaultOpen}
         expectedPin={adminPin}
@@ -1001,7 +1107,6 @@ export default function FeedScreen() {
         onUnlock={() => setAdminOpen(true)}
       />
 
-      {/* Full-Screen Super-Admin Command Center */}
       <Modal visible={adminOpen} animationType="slide" onRequestClose={() => setAdminOpen(false)}>
         <AdminScreen onClose={() => setAdminOpen(false)} />
       </Modal>
@@ -1010,175 +1115,283 @@ export default function FeedScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: COLORS.bg },
+  screen: { flex: 1 },
   header: {
     flexDirection: "row-reverse",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingHorizontal: 14,
+    paddingTop: 10,
+    paddingBottom: 8,
   },
-  brand: { fontSize: 23, fontWeight: "900", color: COLORS.text, letterSpacing: 1.8 },
-  headerRight: { flexDirection: "row", alignItems: "center", gap: 10 },
-  iconBtn: { position: "relative", padding: 5 },
+  brandGroup: { flexDirection: "row-reverse", alignItems: "center", gap: 9 },
+  brandCrest: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  brand: { fontSize: 19, fontWeight: "900", letterSpacing: 2.2 },
+  headerRight: { flexDirection: "row", alignItems: "center", gap: 7 },
+  streakPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    borderWidth: 1,
+    paddingHorizontal: 9,
+    height: 35,
+    borderRadius: 13,
+  },
+  glassIconBtn: {
+    position: "relative",
+    width: 35,
+    height: 35,
+    borderRadius: 13,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   redDot: {
     position: "absolute",
-    top: 4,
-    right: 4,
-    width: 8,
-    height: 8,
+    top: 6,
+    right: 6,
+    width: 7.5,
+    height: 7.5,
     borderRadius: 4,
-    backgroundColor: COLORS.heart,
   },
   announceBox: {
     flexDirection: "row-reverse",
     alignItems: "center",
     gap: 8,
-    backgroundColor: COLORS.surface,
-    borderTopWidth: 0.5,
-    borderBottomWidth: 0.5,
-    borderColor: COLORS.border,
-    paddingHorizontal: 16,
+    marginHorizontal: 14,
+    marginBottom: 8,
+    borderRadius: 15,
+    borderWidth: 1,
+    paddingHorizontal: 14,
     paddingVertical: 10,
   },
-  announceText: { color: COLORS.text, fontSize: 12, fontWeight: "600", flex: 1, textAlign: "right" },
-  storiesBar: { borderBottomWidth: 0.5, borderBottomColor: COLORS.border },
-  storiesRow: { paddingHorizontal: 12, paddingVertical: 10, gap: 14 },
-  storyItem: { alignItems: "center", width: 72 },
-  myStoryWrap: { width: 68, height: 68, position: "relative", alignItems: "center", justifyContent: "center" },
-  myStoryPlus: {
+  announceText: { fontSize: 12, fontWeight: "700", flex: 1, textAlign: "right" },
+  storiesRow: { paddingHorizontal: 14, paddingVertical: 8, gap: 10 },
+  storyCardOuter: {
+    width: 78,
+    height: 104,
+    borderRadius: 24,
+    borderWidth: 1.5,
+    padding: 2.5,
+    overflow: "hidden",
+  },
+  storyCardFrame: {
+    width: 78,
+    height: 104,
+    borderRadius: 24,
+    padding: 2.4,
+  },
+  storyCardInner: {
+    flex: 1,
+    borderRadius: 21,
+    overflow: "hidden",
+    justifyContent: "flex-end",
+    alignItems: "center",
+    paddingBottom: 7,
+  },
+  storyCardBg: { ...StyleSheet.absoluteFillObject, width: "100%", height: "100%" },
+  myStoryPlusOrb: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
+  },
+  storyMiniAvatarWrap: {
     position: "absolute",
-    bottom: 0,
-    right: 0,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: COLORS.verified,
-    borderWidth: 2,
-    borderColor: COLORS.bg,
+    top: 6,
+    right: 6,
+    width: 26,
+    height: 26,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    overflow: "hidden",
+    backgroundColor: "rgba(0,0,0,0.45)",
     alignItems: "center",
     justifyContent: "center",
   },
-  storyRingGrad: { width: 70, height: 70, borderRadius: 35, padding: 2.5, alignItems: "center", justifyContent: "center" },
-  storyRingInner: {
-    width: 65,
-    height: 65,
-    borderRadius: 32.5,
-    backgroundColor: COLORS.bg,
-    padding: 2,
-    alignItems: "center",
-    justifyContent: "center",
+  storyMiniAvatar: { width: "100%", height: "100%" },
+  storyCardLabel: { color: "#fff", fontSize: 10.5, fontWeight: "800", paddingHorizontal: 4 },
+  feedTabsCapsule: {
+    flexDirection: "row-reverse",
+    marginHorizontal: 14,
+    marginTop: 6,
+    marginBottom: 14,
+    padding: 4,
+    borderRadius: 18,
+    borderWidth: 1,
+    gap: 4,
   },
-  storyAvatarImg: { width: 60, height: 60, borderRadius: 30, backgroundColor: COLORS.surface2 },
-  storyAvatarFallback: {
-    width: 62,
-    height: 62,
-    borderRadius: 31,
-    backgroundColor: COLORS.surface2,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  storyName: { color: COLORS.text, fontSize: 11, marginTop: 5 },
-  postContainer: {
-    backgroundColor: COLORS.bg,
-    borderBottomWidth: 0.5,
-    borderBottomColor: COLORS.border,
-    paddingBottom: 14,
+  feedTabTouch: { flex: 1, height: 36, borderRadius: 14, alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  feedTabActiveGrad: { width: "100%", height: "100%", alignItems: "center", justifyContent: "center", borderRadius: 14 },
+  postCard: {
+    marginHorizontal: 12,
+    marginBottom: 16,
+    borderRadius: 26,
+    borderWidth: 1,
+    paddingBottom: 12,
+    overflow: "hidden",
   },
   postHeader: {
     flexDirection: "row-reverse",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingHorizontal: 13,
+    paddingVertical: 11,
   },
   authorRow: { flexDirection: "row-reverse", alignItems: "center", gap: 10 },
-  miniRing: { width: 38, height: 38, borderRadius: 19, padding: 2, alignItems: "center", justifyContent: "center" },
-  postAvatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: COLORS.surface2 },
+  miniRing: { width: 42, height: 42, borderRadius: 15, padding: 2, alignItems: "center", justifyContent: "center" },
+  postAvatar: { width: 38, height: 38, borderRadius: 13 },
   postAvatarFallback: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: COLORS.surface2,
+    width: 38,
+    height: 38,
+    borderRadius: 13,
     alignItems: "center",
     justifyContent: "center",
   },
-  authorName: { color: COLORS.text, fontWeight: "700", fontSize: 13.5 },
-  pinnedPill: {
-    backgroundColor: "rgba(56,151,240,0.16)",
-    paddingHorizontal: 6,
-    paddingVertical: 1.5,
-    borderRadius: 6,
+  authorName: { fontWeight: "900", fontSize: 14 },
+  pinnedPill: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8 },
+  moreBtn: { width: 32, height: 32, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  mediaWrap: {
+    position: "relative",
+    marginHorizontal: 10,
+    height: CARD_MEDIA_HEIGHT,
+    borderRadius: 20,
+    overflow: "hidden",
+    backgroundColor: "#0a0c12",
   },
-  pinnedPillText: { color: COLORS.verified, fontSize: 10, fontWeight: "800" },
-  postSub: { color: COLORS.muted, fontSize: 11, marginTop: 1 },
-  moreBtn: { padding: 6 },
-  mediaWrap: { position: "relative", width: SCREEN_WIDTH, height: SCREEN_WIDTH * 1.1, backgroundColor: COLORS.surface },
   postImage: { width: "100%", height: "100%" },
+  mediaFloatingTag: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "rgba(5,6,11,0.68)",
+    borderWidth: 0.8,
+    borderColor: "rgba(255,255,255,0.16)",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+  },
+  mediaFloatingTagText: { color: "#fff", fontSize: 11, fontWeight: "800" },
+  mediaTimeBadge: {
+    position: "absolute",
+    bottom: 10,
+    left: 10,
+    backgroundColor: "rgba(5,6,11,0.62)",
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  mediaTimeText: { color: "rgba(255,255,255,0.85)", fontSize: 10.5, fontWeight: "700" },
   heartBurst: {
     position: "absolute",
     top: "50%",
     left: "50%",
-    marginTop: -48,
-    marginLeft: -48,
+    marginTop: -46,
+    marginLeft: -46,
     shadowColor: "#000",
     shadowOpacity: 0.5,
     shadowRadius: 12,
   },
-  coloredPostBox: { width: SCREEN_WIDTH, minHeight: 240, padding: 28, justifyContent: "center", alignItems: "center" },
-  coloredPostText: { color: "#fff", fontSize: 22, fontWeight: "800", textAlign: "center", lineHeight: 34 },
+  coloredPostBox: {
+    marginHorizontal: 10,
+    minHeight: 220,
+    borderRadius: 20,
+    padding: 26,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  coloredPostText: { color: "#fff", fontSize: 21, fontWeight: "900", textAlign: "center", lineHeight: 33 },
+  captionWrap: { paddingHorizontal: 14, paddingTop: 10, gap: 6 },
+  captionText: { fontSize: 13.5, lineHeight: 21, textAlign: "right" },
+  pollWrap: { gap: 8, marginTop: 6 },
+  pollOpt: {
+    borderRadius: 13,
+    paddingHorizontal: 13,
+    paddingVertical: 11,
+    flexDirection: "row-reverse",
+    justifyContent: "space-between",
+    borderWidth: 1,
+    overflow: "hidden",
+  },
   actionBar: {
     flexDirection: "row-reverse",
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 12,
-    paddingTop: 10,
-    paddingBottom: 4,
+    paddingTop: 11,
   },
-  actionLeft: { flexDirection: "row-reverse", alignItems: "center", gap: 16 },
-  actionIconBtn: { padding: 2 },
-  captionWrap: { paddingHorizontal: 14, gap: 5 },
-  likesText: { color: COLORS.text, fontWeight: "700", fontSize: 13, textAlign: "right" },
-  captionText: { color: COLORS.text, fontSize: 13.5, lineHeight: 20, textAlign: "right" },
-  captionAuthor: { fontWeight: "700", color: COLORS.text },
-  viewComments: { color: COLORS.muted, fontSize: 12.5, textAlign: "right", marginTop: 2 },
-  pollWrap: { gap: 8, marginTop: 8 },
-  pollOpt: {
-    backgroundColor: COLORS.surface2,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+  actionLeft: { flexDirection: "row-reverse", alignItems: "center", gap: 7 },
+  actionPill: {
     flexDirection: "row-reverse",
-    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 5,
+    height: 36,
+    paddingHorizontal: 11,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: COLORS.border,
   },
-  pollOptVoted: { borderColor: COLORS.primary, backgroundColor: "rgba(168,85,247,0.18)" },
-  pollOptText: { color: COLORS.text, fontSize: 13, fontWeight: "600" },
-  pollPct: { color: COLORS.primary, fontWeight: "800", fontSize: 12 },
-  commentsBox: { marginTop: 8, gap: 8 },
-  commentLine: { color: COLORS.text, fontSize: 13, textAlign: "right" },
-  commentUser: { fontWeight: "700", color: COLORS.text },
+  reactionPill: {
+    flexDirection: "row-reverse",
+    alignSelf: "flex-end",
+    marginHorizontal: 12,
+    marginTop: 8,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    gap: 6,
+    borderWidth: 1,
+  },
+  reactionItem: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center" },
+  giftStrip: {
+    marginHorizontal: 12,
+    marginTop: 8,
+    borderRadius: 18,
+    padding: 11,
+    borderWidth: 1,
+  },
+  giftBtn: {
+    flex: 1,
+    borderRadius: 13,
+    paddingVertical: 9,
+    alignItems: "center",
+    gap: 2,
+    borderWidth: 1,
+  },
+  commentsBox: { marginHorizontal: 14, marginTop: 10, paddingTop: 10, borderTopWidth: 0.5, gap: 8 },
+  commentLine: { fontSize: 13, textAlign: "right", lineHeight: 19 },
   commentInputRow: {
     flexDirection: "row-reverse",
     alignItems: "center",
     gap: 10,
-    borderTopWidth: 0.5,
-    borderTopColor: COLORS.border,
-    paddingTop: 8,
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    marginTop: 2,
   },
-  commentInput: { flex: 1, color: COLORS.text, fontSize: 13, textAlign: "right", paddingVertical: 4 },
+  commentInput: { flex: 1, fontSize: 13, textAlign: "right", paddingVertical: 5 },
   fullStoryScreen: { flex: 1, backgroundColor: "#000", justifyContent: "space-between" },
   fullStoryBg: { ...StyleSheet.absoluteFillObject, width: "100%", height: "100%" },
   storyProgressTrack: {
     height: 3,
-    backgroundColor: "rgba(255,255,255,0.3)",
+    backgroundColor: "rgba(255,255,255,0.28)",
     marginTop: 48,
-    marginHorizontal: 12,
+    marginHorizontal: 14,
     borderRadius: 2,
     overflow: "hidden",
   },
-  storyProgressFill: { height: "100%", backgroundColor: "#ffffff" },
+  storyProgressFill: { height: "100%" },
   fullStoryTop: {
     position: "absolute",
     top: 62,
@@ -1188,48 +1401,42 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
   },
-  fullStoryName: { color: "#fff", fontWeight: "700", fontSize: 15 },
+  fullStoryName: { color: "#fff", fontWeight: "800", fontSize: 15 },
   fullStoryCaptionBox: { paddingHorizontal: 20, paddingBottom: 48 },
-  fullStoryCaption: { color: "#fff", fontSize: 17, fontWeight: "700", textAlign: "center", lineHeight: 26 },
-  modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.75)", justifyContent: "center", padding: 20 },
-  modalBox: { backgroundColor: COLORS.surface, borderRadius: 20, padding: 18, borderWidth: 1, borderColor: COLORS.border },
-  modalTitle: { color: COLORS.text, fontSize: 16, fontWeight: "700", textAlign: "right", marginBottom: 12 },
-  modalInput: {
-    backgroundColor: COLORS.surface2,
-    borderRadius: 12,
-    padding: 12,
-    color: COLORS.text,
-    textAlign: "right",
-    marginBottom: 10,
+  fullStoryCaption: { color: "#fff", fontSize: 17, fontWeight: "800", textAlign: "center", lineHeight: 26 },
+  storyReactBtn: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: "rgba(255,255,255,0.18)",
+    alignItems: "center",
+    justifyContent: "center",
   },
-  primaryBtn: { flex: 1, backgroundColor: COLORS.primary, borderRadius: 12, padding: 12, alignItems: "center" },
-  outlineBtn: { flex: 1, backgroundColor: COLORS.surface2, borderRadius: 12, padding: 12, alignItems: "center" },
+  modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.82)", justifyContent: "center", padding: 20 },
+  modalBox: { borderRadius: 26, padding: 18, borderWidth: 1 },
+  modalTitle: { fontSize: 16, fontWeight: "900", textAlign: "right", marginBottom: 12 },
+  modalInput: { borderRadius: 14, padding: 12, textAlign: "right", marginBottom: 10, borderWidth: 1 },
+  primaryBtn: { flex: 1, borderRadius: 14, padding: 13, alignItems: "center" },
+  outlineBtn: { flex: 1, borderRadius: 14, padding: 13, alignItems: "center" },
   notifRow: {
     flexDirection: "row-reverse",
     alignItems: "center",
     gap: 10,
     paddingVertical: 10,
     borderBottomWidth: 0.5,
-    borderBottomColor: COLORS.border,
   },
-  sheetBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.78)",
-    justifyContent: "flex-end",
-  },
+  sheetBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.82)", justifyContent: "flex-end" },
   settingsSheet: {
-    backgroundColor: "#0c0c0f",
-    borderTopLeftRadius: 26,
-    borderTopRightRadius: 26,
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
     paddingHorizontal: 18,
     paddingTop: 10,
     paddingBottom: 24,
-    maxHeight: "82%",
-    borderTopWidth: 1,
-    borderColor: COLORS.border,
+    maxHeight: "84%",
+    borderTopWidth: 1.2,
   },
   sheetHandle: {
-    width: 42,
+    width: 44,
     height: 4,
     borderRadius: 2,
     backgroundColor: "rgba(255,255,255,0.22)",
@@ -1242,79 +1449,43 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 14,
   },
-  settingsTitle: { color: COLORS.text, fontSize: 17, fontWeight: "800" },
-  sheetCloseBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: COLORS.surface2,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  settingsTitle: { fontSize: 17, fontWeight: "900" },
+  sheetCloseBtn: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center" },
   accountMiniCard: {
     flexDirection: "row-reverse",
     alignItems: "center",
     gap: 12,
-    backgroundColor: COLORS.surface,
-    padding: 12,
-    borderRadius: 14,
-    borderWidth: 0.5,
-    borderColor: COLORS.border,
+    padding: 13,
+    borderRadius: 18,
+    borderWidth: 1,
   },
-  miniAvatar: { width: 44, height: 44, borderRadius: 22 },
-  miniAvatarFallback: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: COLORS.surface2,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  miniAvatar: { width: 46, height: 46, borderRadius: 16 },
+  miniAvatarFallback: { width: 46, height: 46, borderRadius: 16, alignItems: "center", justifyContent: "center" },
   settingRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: COLORS.surface,
-    padding: 13,
-    borderRadius: 14,
-    borderWidth: 0.5,
-    borderColor: COLORS.border,
+    padding: 14,
+    borderRadius: 18,
+    borderWidth: 1,
   },
-  settingBlockCard: {
-    backgroundColor: COLORS.surface,
-    padding: 13,
-    borderRadius: 14,
-    borderWidth: 0.5,
-    borderColor: COLORS.border,
-  },
-  settingTitle: { color: COLORS.text, fontSize: 13.5, fontWeight: "700" },
-  settingSub: { color: COLORS.muted, fontSize: 11, marginTop: 2 },
-  onlinePill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    backgroundColor: "rgba(34,197,94,0.14)",
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    borderRadius: 999,
-  },
-  onlineDot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: COLORS.success },
+  settingBlockCard: { padding: 14, borderRadius: 18, borderWidth: 1 },
+  settingTitle: { fontSize: 13.5, fontWeight: "800" },
+  settingSub: { fontSize: 11.5, marginTop: 2 },
   blockedItem: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 6,
+    paddingVertical: 7,
     borderTopWidth: 0.5,
-    borderTopColor: COLORS.border,
   },
   logoutBtn: {
     flexDirection: "row-reverse",
     justifyContent: "center",
     alignItems: "center",
     gap: 8,
-    backgroundColor: COLORS.surface2,
-    borderRadius: 13,
-    padding: 13,
+    borderRadius: 16,
+    padding: 14,
   },
   dangerBtn: {
     flexDirection: "row-reverse",
@@ -1322,74 +1493,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
     backgroundColor: "rgba(239,68,68,0.12)",
-    borderColor: COLORS.danger,
-    borderWidth: 0.8,
-    borderRadius: 13,
-    padding: 13,
-  },
-  versionFooter: {
-    alignItems: "center",
-    paddingTop: 12,
-    paddingBottom: 4,
-  },
-  versionText: {
-    color: COLORS.muted,
-    fontSize: 11.5,
-    letterSpacing: 0.4,
-  },
-  feedTabsBar: {
-    flexDirection: "row-reverse",
-    borderBottomWidth: 0.5,
-    borderBottomColor: COLORS.border,
-    backgroundColor: COLORS.bg,
-  },
-  feedTabBtn: {
-    flex: 1,
-    paddingVertical: 11,
-    alignItems: "center",
-    borderBottomWidth: 2,
-    borderBottomColor: "transparent",
-  },
-  feedTabText: { color: COLORS.muted, fontSize: 13, fontWeight: "600" },
-  reactionPill: {
-    flexDirection: "row-reverse",
-    alignSelf: "flex-end",
-    marginHorizontal: 14,
-    marginTop: 4,
-    marginBottom: 4,
-    backgroundColor: COLORS.surface,
-    borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    gap: 6,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderRadius: 16,
+    padding: 14,
   },
-  reactionItem: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  giftStrip: {
-    marginHorizontal: 14,
-    marginTop: 6,
-    marginBottom: 6,
-    backgroundColor: COLORS.surface,
-    borderRadius: 14,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: "rgba(245,158,11,0.35)",
-  },
-  giftBtn: {
-    flex: 1,
-    backgroundColor: COLORS.surface2,
-    borderRadius: 11,
-    paddingVertical: 8,
-    alignItems: "center",
-    gap: 2,
-    borderWidth: 0.5,
-    borderColor: COLORS.border,
-  },
+  versionFooter: { alignItems: "center", paddingTop: 12, paddingBottom: 4 },
+  versionText: { fontSize: 11.5, letterSpacing: 0.5 },
 });
