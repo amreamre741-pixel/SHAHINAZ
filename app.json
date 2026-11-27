@@ -40,7 +40,10 @@
     ],
     "extra": {
       "supportsRTL": true,
-      "privacyPolicyUrl": "https://amreamre741-pixel.github.io/SHAHINAZ/privacy.html"
+      "privacyPolicyUrl": "https://amreamre741-pixel.github.io/SHAHINAZ/privacy.html",
+      "eas": {
+        "projectId": "c5558cb5-f819-4663-83eb-ee9c1963a68c"
+      }
     }
   }
 }
