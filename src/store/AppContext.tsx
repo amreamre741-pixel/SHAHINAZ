@@ -30,7 +30,8 @@ interface AppContextValue {
   toggleLike: (postId: string) => void;
   toggleSave: (postId: string) => void;
   addComment: (postId: string, text: string) => void;
-  createPost: (content: string, imageUri?: string, location?: string) => void;
+  createPost: (content: string, imageUri?: string, location?: string, bgColor?: string, pollOptions?: string[]) => void;
+  votePoll: (postId: string, optionId: string) => void;
   addStory: (text: string, imageUri?: string) => void;
   markStorySeen: (storyId: string) => void;
   markAllNotificationsRead: () => void;
@@ -208,14 +209,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     );
   }
 
-  function createPost(content: string, imageUri?: string, location?: string) {
+  function createPost(content: string, imageUri?: string, location?: string, bgColor?: string, pollOptions?: string[]) {
     if (!currentUser || (!content.trim() && !imageUri)) return;
+    const cleanOpts = (pollOptions || []).map((o) => o.trim()).filter(Boolean);
     const newPost: Post = {
       id: `p_${Date.now()}`,
       author: currentUser,
       content: content.trim(),
       imageUri,
       location: location?.trim() || undefined,
+      bgColor: !imageUri ? bgColor : undefined,
+      poll:
+        cleanOpts.length >= 2
+          ? {
+              options: cleanOpts.map((label, idx) => ({ id: `opt_${idx}_${Date.now()}`, label, votes: 0 })),
+            }
+          : undefined,
       likes: 0,
       likedByMe: false,
       savedByMe: false,
@@ -223,6 +232,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       createdAt: "الآن",
     };
     setPosts((prev) => [newPost, ...prev]);
+  }
+
+  function votePoll(postId: string, optionId: string) {
+    setPosts((prev) =>
+      prev.map((p) => {
+        if (p.id !== postId || !p.poll || p.poll.votedOptionId) return p;
+        return {
+          ...p,
+          poll: {
+            votedOptionId: optionId,
+            options: p.poll.options.map((o) => (o.id === optionId ? { ...o, votes: o.votes + 1 } : o)),
+          },
+        };
+      })
+    );
   }
 
   function addStory(text: string, imageUri?: string) {
@@ -347,6 +371,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         toggleSave,
         addComment,
         createPost,
+        votePoll,
         addStory,
         markStorySeen,
         markAllNotificationsRead,

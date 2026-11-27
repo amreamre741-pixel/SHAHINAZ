@@ -14,6 +14,7 @@ export default function FeedScreen() {
     toggleLike,
     toggleSave,
     addComment,
+    votePoll,
     addStory,
     markStorySeen,
     markAllNotificationsRead,
@@ -146,8 +147,52 @@ export default function FeedScreen() {
               </TouchableOpacity>
             </View>
 
-            {!!item.content && <Text style={styles.content}>{item.content}</Text>}
+            {!!item.content &&
+              (item.bgColor ? (
+                <View style={{ backgroundColor: item.bgColor, borderRadius: 14, padding: 24, marginBottom: 10, minHeight: 130, justifyContent: "center" }}>
+                  <Text style={{ color: "#fff", fontSize: 18, fontWeight: "700", textAlign: "center", lineHeight: 28 }}>
+                    {item.content}
+                  </Text>
+                </View>
+              ) : (
+                <Text style={styles.content}>{item.content}</Text>
+              ))}
             {!!item.imageUri && <Image source={{ uri: item.imageUri }} style={styles.postImage} />}
+
+            {item.poll && (
+              <View style={{ gap: 8, marginBottom: 10 }}>
+                {(() => {
+                  const totalVotes = item.poll!.options.reduce((s, o) => s + o.votes, 0);
+                  return item.poll!.options.map((opt) => {
+                    const pct = totalVotes > 0 ? Math.round((opt.votes / totalVotes) * 100) : 0;
+                    const voted = item.poll!.votedOptionId === opt.id;
+                    return (
+                      <TouchableOpacity
+                        key={opt.id}
+                        style={{
+                          backgroundColor: voted ? "rgba(139,92,246,0.22)" : COLORS.surface2,
+                          borderColor: voted ? COLORS.primary : COLORS.border,
+                          borderWidth: 1,
+                          borderRadius: 10,
+                          padding: 10,
+                          flexDirection: "row-reverse",
+                          justifyContent: "space-between",
+                        }}
+                        onPress={() => votePoll(item.id, opt.id)}
+                      >
+                        <Text style={{ color: COLORS.text, fontWeight: "600", fontSize: 13 }}>
+                          {voted ? "✓ " : ""}
+                          {opt.label}
+                        </Text>
+                        {item.poll!.votedOptionId && (
+                          <Text style={{ color: COLORS.primary, fontWeight: "700", fontSize: 12 }}>{pct}%</Text>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  });
+                })()}
+              </View>
+            )}
 
             <View style={styles.actionsRow}>
               <TouchableOpacity style={styles.actionBtn} onPress={() => toggleLike(item.id)}>

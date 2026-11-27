@@ -18,12 +18,23 @@ export interface Comment {
   createdAt: string;
 }
 
+export interface PollOption {
+  id: string;
+  label: string;
+  votes: number;
+}
+
 export interface Post {
   id: string;
   author: User;
   content: string;
   imageUri?: string;
   location?: string;
+  bgColor?: string;
+  poll?: {
+    options: PollOption[];
+    votedOptionId?: string;
+  };
   likes: number;
   likedByMe: boolean;
   savedByMe: boolean;

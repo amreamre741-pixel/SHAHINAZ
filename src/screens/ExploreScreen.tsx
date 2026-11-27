@@ -1,12 +1,21 @@
 import React, { useMemo, useState } from "react";
-import { Alert, FlatList, Linking, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Alert, FlatList, Linking, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { COLORS } from "../theme";
 import { useApp } from "../store/AppContext";
 
+const TRENDING_TAGS = ["#الجزائر", "#SHAHINAZ", "#وهران", "#تجارة", "#تقنية"];
+
+const DEMO_REELS = [
+  { id: "r_1", author: "ياسين بن علي 🧔🏻", title: "جولة مسائية في الجزائر العاصمة 🇩🇿✨", likes: 420, bg: "#4c1d95" },
+  { id: "r_2", author: "سارة منصوري 👩🏻‍🎨", title: "أفضل 3 أفكار لتنظيم يومك بفعالية 💡", likes: 890, bg: "#9d174d" },
+  { id: "r_3", author: "كريم تكنولوجي 👨🏻‍💻", title: "أسرار النجاح في التجارة الإلكترونية في الجزائر 🚀", likes: 1250, bg: "#065f46" },
+];
+
 export default function ExploreScreen() {
   const { posts, marketItems, addMarketItem } = useApp();
-  const [mode, setMode] = useState<"explore" | "market">("explore");
+  const [mode, setMode] = useState<"explore" | "reels" | "market">("explore");
   const [q, setQ] = useState("");
+  const [likedReels, setLikedReels] = useState<string[]>([]);
   const [addingProduct, setAddingProduct] = useState(false);
   const [pTitle, setPTitle] = useState("");
   const [pPrice, setPPrice] = useState("");
@@ -14,19 +23,20 @@ export default function ExploreScreen() {
   const [pPhone, setPPhone] = useState("");
 
   const filteredPosts = useMemo(() => {
-    const s = q.trim().toLowerCase();
+    const s = q.trim().replace(/^#/, "").toLowerCase();
     if (!s) return posts;
     return posts.filter(
-      (p) => p.content.toLowerCase().includes(s) || p.author.name.toLowerCase().includes(s)
+      (p) =>
+        p.content.toLowerCase().includes(s) ||
+        p.author.name.toLowerCase().includes(s) ||
+        (p.location || "").toLowerCase().includes(s)
     );
   }, [posts, q]);
 
   const filteredMarket = useMemo(() => {
     const s = q.trim().toLowerCase();
     if (!s) return marketItems;
-    return marketItems.filter(
-      (m) => m.title.toLowerCase().includes(s) || m.city.toLowerCase().includes(s)
-    );
+    return marketItems.filter((m) => m.title.toLowerCase().includes(s) || m.city.toLowerCase().includes(s));
   }, [marketItems, q]);
 
   function handleAddProduct() {
@@ -59,37 +69,83 @@ export default function ExploreScreen() {
           <Text style={[styles.switchText, mode === "explore" && styles.switchTextActive]}>🔍 استكشاف</Text>
         </TouchableOpacity>
         <TouchableOpacity
+          style={[styles.switchBtn, mode === "reels" && styles.switchActive]}
+          onPress={() => setMode("reels")}
+        >
+          <Text style={[styles.switchText, mode === "reels" && styles.switchTextActive]}>🎬 ريلز</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
           style={[styles.switchBtn, mode === "market" && styles.switchActive]}
           onPress={() => setMode("market")}
         >
-          <Text style={[styles.switchText, mode === "market" && styles.switchTextActive]}>🛒 السوق (Marketplace)</Text>
+          <Text style={[styles.switchText, mode === "market" && styles.switchTextActive]}>🛒 السوق</Text>
         </TouchableOpacity>
       </View>
 
-      <TextInput
-        style={styles.search}
-        placeholder={mode === "explore" ? "🔍 ابحث عن أشخاص أو منشورات..." : "🔍 ابحث عن منتج أو ولاية..."}
-        placeholderTextColor={COLORS.muted}
-        value={q}
-        onChangeText={setQ}
-      />
-
-      {mode === "explore" ? (
-        <FlatList
-          data={filteredPosts}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <View style={styles.card}>
-              <Text style={styles.author}>
-                {item.author.avatarEmoji} {item.author.name}
-              </Text>
-              <Text style={styles.text} numberOfLines={3}>
-                {item.content}
-              </Text>
-            </View>
-          )}
+      {mode !== "reels" && (
+        <TextInput
+          style={styles.search}
+          placeholder={mode === "explore" ? "🔍 ابحث عن أشخاص أو هاشتاق..." : "🔍 ابحث عن منتج أو ولاية..."}
+          placeholderTextColor={COLORS.muted}
+          value={q}
+          onChangeText={setQ}
         />
-      ) : (
+      )}
+
+      {mode === "explore" && (
+        <>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ maxHeight: 42, marginBottom: 10 }} contentContainerStyle={{ gap: 8 }}>
+            {TRENDING_TAGS.map((tag) => (
+              <TouchableOpacity key={tag} style={styles.tagPill} onPress={() => setQ(q === tag ? "" : tag)}>
+                <Text style={{ color: COLORS.primary, fontWeight: "700", fontSize: 12 }}>🔥 {tag}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+          <FlatList
+            data={filteredPosts}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => (
+              <View style={styles.card}>
+                <Text style={styles.author}>
+                  {item.author.avatarEmoji} {item.author.name}
+                </Text>
+                <Text style={styles.text} numberOfLines={3}>
+                  {item.content}
+                </Text>
+              </View>
+            )}
+          />
+        </>
+      )}
+
+      {mode === "reels" && (
+        <FlatList
+          data={DEMO_REELS}
+          keyExtractor={(r) => r.id}
+          renderItem={({ item }) => {
+            const liked = likedReels.includes(item.id);
+            return (
+              <View style={[styles.reelCard, { backgroundColor: item.bg }]}>
+                <Text style={{ fontSize: 48, marginBottom: 14 }}>🎬</Text>
+                <Text style={styles.reelTitle}>{item.title}</Text>
+                <Text style={styles.reelAuthor}>{item.author}</Text>
+                <TouchableOpacity
+                  style={styles.reelLikeBtn}
+                  onPress={() =>
+                    setLikedReels((prev) => (prev.includes(item.id) ? prev.filter((x) => x !== item.id) : [...prev, item.id]))
+                  }
+                >
+                  <Text style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}>
+                    {liked ? "❤️" : "🤍"} {item.likes + (liked ? 1 : 0)}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            );
+          }}
+        />
+      )}
+
+      {mode === "market" && (
         <View style={{ flex: 1 }}>
           <TouchableOpacity style={styles.addBtn} onPress={() => setAddingProduct((v) => !v)}>
             <Text style={{ color: "#fff", fontWeight: "700" }}>
@@ -159,7 +215,7 @@ const styles = StyleSheet.create({
   },
   switchBtn: { flex: 1, paddingVertical: 8, borderRadius: 10, alignItems: "center" },
   switchActive: { backgroundColor: COLORS.primary },
-  switchText: { color: COLORS.muted, fontWeight: "700", fontSize: 13 },
+  switchText: { color: COLORS.muted, fontWeight: "700", fontSize: 12 },
   switchTextActive: { color: "#fff" },
   search: {
     backgroundColor: COLORS.surface,
@@ -169,7 +225,33 @@ const styles = StyleSheet.create({
     textAlign: "right",
     borderWidth: 1,
     borderColor: COLORS.border,
-    marginBottom: 12,
+    marginBottom: 10,
+  },
+  tagPill: {
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    justifyContent: "center",
+  },
+  reelCard: {
+    borderRadius: 20,
+    padding: 28,
+    minHeight: 280,
+    marginBottom: 14,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  reelTitle: { color: "#fff", fontSize: 18, fontWeight: "800", textAlign: "center", lineHeight: 28 },
+  reelAuthor: { color: "rgba(255,255,255,0.8)", fontSize: 13, marginTop: 8 },
+  reelLikeBtn: {
+    marginTop: 18,
+    backgroundColor: "rgba(0,0,0,0.35)",
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderRadius: 999,
   },
   addBtn: { backgroundColor: COLORS.primary, borderRadius: 12, padding: 12, alignItems: "center", marginBottom: 10 },
   input: {
