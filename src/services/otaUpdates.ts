@@ -2,7 +2,7 @@ import * as Updates from "expo-updates";
 import { apiFetch } from "./api";
 import { devTelemetry } from "./devTelemetry";
 
-export const APP_LOCAL_VERSION = "1.0.0";
+export const APP_LOCAL_VERSION = Updates.runtimeVersion || "2.0.0";
 
 export interface OtaMetadata {
   isEnabled: boolean;
