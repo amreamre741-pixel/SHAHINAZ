@@ -96,6 +96,109 @@ app.get("/api/health", async (_req, res) => {
   });
 });
 
+// Self-healing Neon PostgreSQL Schema Bootstrapper + Community Seeding
+async function ensureDatabaseSchema() {
+  const statements = [
+    `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "videoUrl" TEXT NOT NULL DEFAULT ''`,
+    `ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "imageUrl" TEXT NOT NULL DEFAULT ''`,
+    `ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "audioUrl" TEXT NOT NULL DEFAULT ''`,
+    `ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "durationSec" INTEGER NOT NULL DEFAULT 0`,
+    `CREATE TABLE IF NOT EXISTS "FriendRequest" (
+      "id" TEXT NOT NULL PRIMARY KEY,
+      "senderId" TEXT NOT NULL REFERENCES "User"("id") ON DELETE CASCADE,
+      "receiverId" TEXT NOT NULL REFERENCES "User"("id") ON DELETE CASCADE,
+      "status" TEXT NOT NULL DEFAULT 'PENDING',
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE ("senderId", "receiverId")
+    )`,
+    `CREATE TABLE IF NOT EXISTS "LiveRoom" (
+      "id" TEXT NOT NULL PRIMARY KEY,
+      "hostId" TEXT NOT NULL REFERENCES "User"("id") ON DELETE CASCADE,
+      "title" TEXT NOT NULL,
+      "topic" TEXT NOT NULL DEFAULT 'دردشة مباشرة',
+      "kind" TEXT NOT NULL DEFAULT 'LIVE',
+      "isActive" BOOLEAN NOT NULL DEFAULT true,
+      "viewers" INTEGER NOT NULL DEFAULT 1,
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS "LiveRoomMessage" (
+      "id" TEXT NOT NULL PRIMARY KEY,
+      "roomId" TEXT NOT NULL REFERENCES "LiveRoom"("id") ON DELETE CASCADE,
+      "userId" TEXT NOT NULL REFERENCES "User"("id") ON DELETE CASCADE,
+      "text" TEXT NOT NULL DEFAULT '',
+      "audioUrl" TEXT NOT NULL DEFAULT '',
+      "durationSec" INTEGER NOT NULL DEFAULT 0,
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS "MediaFile" (
+      "id" TEXT NOT NULL PRIMARY KEY,
+      "mimeType" TEXT NOT NULL,
+      "data" BYTEA NOT NULL,
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`,
+  ];
+
+  for (const sql of statements) {
+    try {
+      await prisma.$executeRawUnsafe(sql);
+    } catch (err) {
+      recordServerError("BOOT", "ensureDatabaseSchema", err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  try {
+    const count = await prisma.user.count();
+    if (count < 3) {
+      const seedHash = await bcrypt.hash("Shahinaz2026!", 8);
+      const seeds = [
+        {
+          name: "سارة منصوري",
+          username: "sara_style",
+          email: "sara@shahinaz.dz",
+          bio: "يوميات، سفر، وأفكار إبداعية من وهران ✨",
+          avatarUrl: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=240&q=80",
+          verified: true,
+        },
+        {
+          name: "ياسين بن علي",
+          username: "yassine_dz",
+          email: "yassine@shahinaz.dz",
+          bio: "مصور ومصمم من الجزائر العاصمة 📸🇩🇿",
+          avatarUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=240&q=80",
+          verified: true,
+        },
+        {
+          name: "كريم تكنولوجي",
+          username: "karim_tech",
+          email: "karim@shahinaz.dz",
+          bio: "تقنية وتجارة إلكترونية 58 ولاية 🚀",
+          avatarUrl: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=240&q=80",
+          verified: true,
+        },
+        {
+          name: "أمين فوتو",
+          username: "amine_shots",
+          email: "amine@shahinaz.dz",
+          bio: "الطبيعة والمدن الجزائرية بعدستي 📷",
+          avatarUrl: "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=240&q=80",
+          verified: false,
+        },
+      ];
+      for (const s of seeds) {
+        await prisma.user
+          .upsert({
+            where: { username: s.username },
+            create: { ...s, passwordHash: seedHash },
+            update: {},
+          })
+          .catch(() => {});
+      }
+    }
+  } catch {
+    // ignore seed errors
+  }
+}
+
 // Remote App Version Control (v2.0.0 APK with Real Camera, Real Voice Notes & Video Player)
 let appVersionConfig = {
   latestVersion: "2.0.0",
@@ -103,7 +206,7 @@ let appVersionConfig = {
   forceUpdate: false,
   releaseNotes:
     "إصدار SHAHINAZ v2.0.0 الحقيقي — إضافة أصدقاء وطلبات صداقة أونلاين + رفع وتشغيل فيديوهات حقيقية + تسجيل وتشغيل رسائل صوتية (فويس) حقيقية + كاميرا بث مباشر حقيقية + غرف صوتية حقيقية!",
-  downloadUrl: "https://expo.dev/accounts/shahinaz-1994/projects/shahinaz-1994/builds",
+  downloadUrl: "https://expo.dev/accounts/shahinaz-1994/projects/shahinaz-1994/builds/6dccbd69-1d05-4212-9b06-c26234491252",
 };
 
 app.get("/api/app/version", (_req, res) => {
@@ -711,6 +814,107 @@ app.post("/api/users/:id/block", requireAuth, async (req: AuthReq, res) => {
   res.json({ ok: true });
 });
 
+// Update own profile (persisted to Neon DB)
+app.put("/api/auth/me", requireAuth, async (req: AuthReq, res) => {
+  try {
+    const { name, bio, avatarUrl } = req.body || {};
+    const updated = await prisma.user.update({
+      where: { id: req.userId! },
+      data: {
+        ...(typeof name === "string" && name.trim() ? { name: name.trim() } : {}),
+        ...(typeof bio === "string" ? { bio: bio.trim() } : {}),
+        ...(typeof avatarUrl === "string" ? { avatarUrl } : {}),
+      },
+      select: { id: true, name: true, username: true, email: true, bio: true, avatarUrl: true, verified: true },
+    });
+    res.json({ ok: true, user: updated });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Profile update failed";
+    recordServerError("PUT", "/api/auth/me", msg);
+    res.status(500).json({ error: msg });
+  }
+});
+
+// Delete own post (persisted to Neon DB)
+app.delete("/api/posts/:id", requireAuth, async (req: AuthReq, res) => {
+  try {
+    await prisma.post.deleteMany({
+      where: { id: String(req.params.id), authorId: req.userId! },
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Delete post failed";
+    recordServerError("DELETE", req.path, msg);
+    res.status(500).json({ error: msg });
+  }
+});
+
+// Real HTTPS Media Upload & Byte-Range Streaming (Android ExoPlayer & Audio.Sound native compatible!)
+app.post("/api/media/upload", requireAuth, async (req: AuthReq, res) => {
+  try {
+    const { base64, mimeType } = req.body || {};
+    if (!base64 || typeof base64 !== "string") {
+      return res.status(400).json({ error: "الملف فارغ" });
+    }
+    const cleanB64 = base64.replace(/^data:[^;]+;base64,/, "");
+    const buf = Buffer.from(cleanB64, "base64");
+    if (buf.length > 22 * 1024 * 1024) {
+      return res.status(413).json({ error: "حجم الملف أكبر من الحد المسموح (22MB)" });
+    }
+    const safeMime = String(mimeType || "application/octet-stream").slice(0, 64);
+    const saved = await prisma.mediaFile.create({
+      data: { mimeType: safeMime, data: buf },
+      select: { id: true },
+    });
+    const host = req.get("host") || "shahinaz.onrender.com";
+    const proto = req.headers["x-forwarded-proto"] === "http" ? "http" : "https";
+    const ext = safeMime.includes("mp4") ? ".mp4" : safeMime.includes("audio") ? ".m4a" : ".jpg";
+    const publicUrl = `${proto}://${host}/api/media/${saved.id}${ext}`;
+    res.json({ ok: true, id: saved.id, url: publicUrl });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Media upload failed";
+    recordServerError("POST", "/api/media/upload", msg);
+    res.status(500).json({ error: msg });
+  }
+});
+
+app.get("/api/media/:fileId", async (req, res) => {
+  try {
+    const id = String(req.params.fileId).replace(/\.[a-z0-9]+$/i, "");
+    const file = await prisma.mediaFile.findUnique({ where: { id } });
+    if (!file) return res.status(404).json({ error: "الملف غير موجود" });
+
+    const buf = Buffer.from(file.data);
+    const total = buf.length;
+    const range = req.headers.range;
+
+    res.setHeader("Content-Type", file.mimeType);
+    res.setHeader("Accept-Ranges", "bytes");
+    res.setHeader("Cache-Control", "public, max-age=31536000");
+
+    if (range) {
+      const parts = range.replace(/bytes=/, "").split("-");
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : total - 1;
+      if (isNaN(start) || start >= total) {
+        return res.status(416).setHeader("Content-Range", `bytes */${total}`).end();
+      }
+      const chunk = buf.subarray(start, Math.min(end, total - 1) + 1);
+      res.status(206);
+      res.setHeader("Content-Range", `bytes ${start}-${Math.min(end, total - 1)}/${total}`);
+      res.setHeader("Content-Length", chunk.length);
+      return res.send(chunk);
+    }
+
+    res.setHeader("Content-Length", total);
+    res.send(buf);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Media stream failed";
+    recordServerError("GET", req.path, msg);
+    res.status(500).json({ error: msg });
+  }
+});
+
 // Cloudflare R2 Presigned Upload URL
 app.post("/api/upload/presign", requireAuth, async (req: AuthReq, res) => {
   if (!r2) return res.status(503).json({ error: "Cloudflare R2 not configured yet" });
@@ -737,4 +941,7 @@ app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
 });
 
 const port = Number(process.env.PORT) || 4000;
-app.listen(port, () => console.log(`SHAHINAZ API v2.0 running on port ${port}`));
+app.listen(port, () => {
+  console.log(`SHAHINAZ API v2.1 running on port ${port}`);
+  ensureDatabaseSchema().catch((err) => console.error("Schema bootstrap error:", err));
+});

@@ -12,11 +12,11 @@ import {
   View,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
-import * as FileSystem from "expo-file-system";
 import { Audio } from "expo-av";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useApp } from "../store/AppContext";
+import { uploadMediaFile } from "../services/mediaUpload";
 import type { NoteItem } from "../types";
 import AuroraBackground from "../components/AuroraBackground";
 import VoiceMessagePlayer from "../components/VoiceMessagePlayer";
@@ -32,6 +32,7 @@ const QUICK_REPLIES = [
 export default function MessagesScreen() {
   const {
     currentUser,
+    token,
     allUsers,
     chats,
     notes,
@@ -97,14 +98,8 @@ export default function MessagesScreen() {
       quality: 0.65,
     });
     if (!res.canceled && res.assets[0]?.uri) {
-      let uriToSend = res.assets[0].uri;
-      try {
-        const b64 = await FileSystem.readAsStringAsync(uriToSend, { encoding: FileSystem.EncodingType.Base64 });
-        uriToSend = `data:image/jpeg;base64,${b64}`;
-      } catch {
-        // fallback local uri
-      }
-      sendMessage(activeChat.id, "", uriToSend);
+      const uploadedUrl = await uploadMediaFile(res.assets[0].uri, "image/jpeg", token);
+      sendMessage(activeChat.id, "", uploadedUrl);
     }
   }
 
@@ -147,14 +142,8 @@ export default function MessagesScreen() {
           const uri = rec.getURI();
           await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true });
           if (uri) {
-            let audioPayload = uri;
-            try {
-              const b64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
-              audioPayload = `data:audio/m4a;base64,${b64}`;
-            } catch {
-              // keep local file uri
-            }
-            sendMessage(activeChat.id, "", undefined, audioPayload, dur);
+            const uploadedUrl = await uploadMediaFile(uri, "audio/m4a", token);
+            sendMessage(activeChat.id, "", undefined, uploadedUrl, dur);
           }
         }
       } catch {

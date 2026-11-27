@@ -15,11 +15,11 @@ import {
   View,
 } from "react-native";
 import { Audio } from "expo-av";
-import * as FileSystem from "expo-file-system";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useApp } from "../store/AppContext";
 import { apiFetch } from "../services/api";
+import { uploadMediaFile } from "../services/mediaUpload";
 import type { AudioRoom } from "../types";
 import ShahinazAiModal from "../components/ShahinazAiModal";
 import AuroraBackground from "../components/AuroraBackground";
@@ -180,13 +180,7 @@ export default function ExploreScreen() {
           const uri = rec.getURI();
           await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true });
           if (uri) {
-            let payload = uri;
-            try {
-              const b64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
-              payload = `data:audio/m4a;base64,${b64}`;
-            } catch {
-              // keep local uri
-            }
+            const payload = await uploadMediaFile(uri, "audio/m4a", token);
             setRoomVoiceClips((prev) => [
               { id: `rv_${Date.now()}`, user: currentUser?.name || "أنت", audioUri: payload, durationSec: dur, time: "الآن" },
               ...prev,

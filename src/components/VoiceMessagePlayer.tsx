@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Audio } from "expo-av";
+import * as FileSystem from "expo-file-system";
 import { Ionicons } from "@expo/vector-icons";
 
 interface VoiceMessagePlayerProps {
@@ -31,6 +32,16 @@ export default function VoiceMessagePlayer({
     };
   }, []);
 
+  async function resolvePlayableUri(raw: string): Promise<string> {
+    if (raw.startsWith("data:audio")) {
+      const b64 = raw.replace(/^data:[^;]+;base64,/, "");
+      const outPath = `${FileSystem.cacheDirectory}voice_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.m4a`;
+      await FileSystem.writeAsStringAsync(outPath, b64, { encoding: FileSystem.EncodingType.Base64 });
+      return outPath;
+    }
+    return raw;
+  }
+
   async function togglePlay() {
     try {
       if (playing && soundRef.current) {
@@ -58,8 +69,9 @@ export default function VoiceMessagePlayer({
         shouldDuckAndroid: true,
       });
 
+      const playableUri = await resolvePlayableUri(uri);
       const { sound } = await Audio.Sound.createAsync(
-        { uri },
+        { uri: playableUri },
         { shouldPlay: true },
         (st) => {
           if (!st.isLoaded) return;

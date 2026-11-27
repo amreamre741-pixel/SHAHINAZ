@@ -1,11 +1,11 @@
 import React, { useState } from "react";
 import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import * as ImagePicker from "expo-image-picker";
-import * as FileSystem from "expo-file-system";
 import { ResizeMode, Video } from "expo-av";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useApp } from "../store/AppContext";
+import { uploadMediaFile } from "../services/mediaUpload";
 import AuroraBackground from "../components/AuroraBackground";
 
 const BG_SWATCHES: { id: string; colors: [string, string]; label?: string }[] = [
@@ -27,7 +27,7 @@ const AI_TEMPLATES = {
 };
 
 export default function CreatePostScreen({ onDone }: { onDone: () => void }) {
-  const { currentUser, theme, createPost, maintenanceMode, bannedWords, rolePermissions } = useApp();
+  const { currentUser, token, theme, createPost, maintenanceMode, bannedWords, rolePermissions } = useApp();
   const [content, setContent] = useState("");
   const [location, setLocation] = useState("");
   const [imageUri, setImageUri] = useState<string | undefined>(undefined);
@@ -104,32 +104,8 @@ export default function CreatePostScreen({ onDone }: { onDone: () => void }) {
 
     setPublishing(true);
     try {
-      let uploadImageUri = imageUri;
-      let uploadVideoUri = videoUri;
-
-      if (imageUri && imageUri.startsWith("file://")) {
-        try {
-          const info = await FileSystem.getInfoAsync(imageUri);
-          if (info.exists && (info.size || 0) < 4 * 1024 * 1024) {
-            const b64 = await FileSystem.readAsStringAsync(imageUri, { encoding: FileSystem.EncodingType.Base64 });
-            uploadImageUri = `data:image/jpeg;base64,${b64}`;
-          }
-        } catch {
-          // keep local URI
-        }
-      }
-
-      if (videoUri && videoUri.startsWith("file://")) {
-        try {
-          const info = await FileSystem.getInfoAsync(videoUri);
-          if (info.exists && (info.size || 0) < 12 * 1024 * 1024) {
-            const b64 = await FileSystem.readAsStringAsync(videoUri, { encoding: FileSystem.EncodingType.Base64 });
-            uploadVideoUri = `data:video/mp4;base64,${b64}`;
-          }
-        } catch {
-          // keep local URI
-        }
-      }
+      const uploadImageUri = imageUri ? await uploadMediaFile(imageUri, "image/jpeg", token) : undefined;
+      const uploadVideoUri = videoUri ? await uploadMediaFile(videoUri, "video/mp4", token) : undefined;
 
       createPost(
         content,

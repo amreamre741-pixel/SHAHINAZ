@@ -482,38 +482,42 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     try {
       const apiPosts = await apiFetch<any[]>("/api/posts", t);
       if (Array.isArray(apiPosts) && apiPosts.length > 0) {
-        const mapped: Post[] = apiPosts.map((p) => ({
-          id: p.id,
-          author: {
-            id: p.author.id,
-            name: p.author.name,
-            username: p.author.username,
-            bio: "",
-            avatarEmoji: "👤",
-            avatarUri: p.author.avatarUrl || undefined,
-            verified: !!p.author.verified,
-            followers: 0,
-            following: 0,
-          },
-          content: p.content || "",
-          imageUri: p.imageUrl || undefined,
-          videoUri: p.videoUrl || undefined,
-          location: p.location || undefined,
-          likes: p._count?.likes ?? 0,
-          likedByMe: Array.isArray(p.likes) && p.likes.length > 0,
-          savedByMe: false,
-          comments: Array.isArray(p.comments)
-            ? p.comments.map((c: any) => ({
-                id: c.id,
-                userId: c.user?.id || c.userId,
-                userName: c.user?.name || "عضو",
-                text: c.text,
-                createdAt: new Date(c.createdAt).toLocaleTimeString("ar-DZ", { hour: "2-digit", minute: "2-digit" }),
-              }))
-            : [],
-          createdAt: new Date(p.createdAt).toLocaleDateString("ar-DZ"),
-        }));
-        setPosts(mapped);
+        const mapped: Post[] = apiPosts
+          .filter((p) => Boolean((p.content || "").trim() || p.imageUrl || p.videoUrl))
+          .map((p) => ({
+            id: p.id,
+            author: {
+              id: p.author.id,
+              name: p.author.name,
+              username: p.author.username,
+              bio: "",
+              avatarEmoji: "👤",
+              avatarUri: p.author.avatarUrl || undefined,
+              verified: !!p.author.verified,
+              followers: 0,
+              following: 0,
+            },
+            content: p.content || "",
+            imageUri: p.imageUrl || undefined,
+            videoUri: p.videoUrl || undefined,
+            location: p.location || undefined,
+            likes: p._count?.likes ?? 0,
+            likedByMe: Array.isArray(p.likes) && p.likes.length > 0,
+            savedByMe: false,
+            comments: Array.isArray(p.comments)
+              ? p.comments.map((c: any) => ({
+                  id: c.id,
+                  userId: c.user?.id || c.userId,
+                  userName: c.user?.name || "عضو",
+                  text: c.text,
+                  createdAt: new Date(c.createdAt).toLocaleTimeString("ar-DZ", { hour: "2-digit", minute: "2-digit" }),
+                }))
+              : [],
+            createdAt: new Date(p.createdAt).toLocaleDateString("ar-DZ"),
+          }));
+        if (mapped.length > 0) {
+          setPosts(mapped.length < 4 ? [...mapped, ...INITIAL_POSTS] : mapped);
+        }
       }
     } catch {
       // keep existing posts if offline or Render cold-starting
@@ -697,6 +701,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }
 
   function deleteMyPost(postId: string) {
+    if (token && !postId.startsWith("p_")) {
+      apiFetch(`/api/posts/${postId}`, token, { method: "DELETE" }).catch(() => {});
+    }
     setPosts((prev) => prev.filter((p) => p.id !== postId));
   }
 
@@ -747,6 +754,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }
 
   function updateProfile(name: string, bio: string, avatarUri?: string) {
+    if (token) {
+      apiFetch("/api/auth/me", token, {
+        method: "PUT",
+        body: JSON.stringify({
+          name: name.trim(),
+          bio: bio.trim(),
+          ...(avatarUri ? { avatarUrl: avatarUri } : {}),
+        }),
+      }).catch(() => {});
+    }
     setCurrentUser((prev) => {
       if (!prev) return prev;
       const updated = {

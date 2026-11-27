@@ -116,7 +116,7 @@ function PostMediaWithDoubleTap({
   );
 }
 
-export default function FeedScreen() {
+export default function FeedScreen({ onOpenMessages }: { onOpenMessages?: () => void }) {
   const {
     currentUser,
     posts,
@@ -1204,7 +1204,7 @@ export default function FeedScreen() {
       <ThemeStudioModal visible={themeOpen} onClose={() => setThemeOpen(false)} />
       <LiveStreamModal visible={liveOpen} onClose={() => setLiveOpen(false)} />
       <WalletModal visible={walletOpen} onClose={() => setWalletOpen(false)} />
-      <FriendsModal visible={friendsOpen} onClose={() => setFriendsOpen(false)} />
+      <FriendsModal visible={friendsOpen} onClose={() => setFriendsOpen(false)} onStartChat={() => onOpenMessages?.()} />
 
       <DevVaultModal
         visible={devVaultOpen}

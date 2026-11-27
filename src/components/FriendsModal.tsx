@@ -5,6 +5,7 @@ import {
   Image,
   Modal,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -167,6 +168,33 @@ export default function FriendsModal({ visible, onClose, onStartChat }: FriendsM
               <Ionicons name="close" size={20} color={theme.text} />
             </TouchableOpacity>
           </View>
+
+          <TouchableOpacity
+            activeOpacity={0.88}
+            style={{
+              flexDirection: "row-reverse",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 7,
+              backgroundColor: theme.primarySoft,
+              borderColor: theme.borderGlow,
+              borderWidth: 1,
+              borderRadius: 14,
+              paddingVertical: 9,
+              marginBottom: 10,
+            }}
+            onPress={() =>
+              Share.share({
+                message:
+                  "انضم إليّ في تطبيق SHAHINAZ (دردشة فويس، لايف، فيديوهات، وسوق 58 ولاية) 👑🇩🇿!\nحمّل التطبيق الآن: https://expo.dev/accounts/shahinaz-1994/projects/shahinaz-1994/builds",
+              })
+            }
+          >
+            <Ionicons name="share-social-outline" size={16} color={theme.primary} />
+            <Text style={{ color: theme.primary, fontSize: 12.5, fontWeight: "900" }}>
+              📲 دعوة أصدقائك لتحميل SHAHINAZ وإضافتك
+            </Text>
+          </TouchableOpacity>
 
           {/* 3-Tab Switcher */}
           <View style={[styles.tabsRow, { backgroundColor: theme.surface, borderColor: theme.border }]}>

@@ -145,3 +145,11 @@ model LiveRoomMessage {
 
   @@index([roomId, createdAt])
 }
+
+model MediaFile {
+  id        String   @id @default(cuid())
+  mimeType  String
+  data      Bytes
+  createdAt DateTime @default(now())
+}
+
