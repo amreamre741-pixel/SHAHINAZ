@@ -96,6 +96,31 @@ app.get("/api/health", async (_req, res) => {
   });
 });
 
+// Remote App Version Control (for Major APK / Google Play Store Updates)
+let appVersionConfig = {
+  latestVersion: "1.0.0",
+  minVersion: "1.0.0",
+  forceUpdate: false,
+  releaseNotes: "تحديث SHAHINAZ Ultra + مركز قيادة المطور DevOS v2.0",
+  downloadUrl: "https://expo.dev/accounts/shahinaz-1994/projects/shahinaz-1994/builds",
+};
+
+app.get("/api/app/version", (_req, res) => {
+  res.json({ ok: true, ...appVersionConfig });
+});
+
+app.post("/api/admin/app/version", requireAdminPin, (req, res) => {
+  const { latestVersion, minVersion, forceUpdate, releaseNotes, downloadUrl } = req.body || {};
+  appVersionConfig = {
+    latestVersion: String(latestVersion || appVersionConfig.latestVersion).trim(),
+    minVersion: String(minVersion || appVersionConfig.minVersion).trim(),
+    forceUpdate: Boolean(forceUpdate),
+    releaseNotes: String(releaseNotes ?? appVersionConfig.releaseNotes).trim(),
+    downloadUrl: String(downloadUrl || appVersionConfig.downloadUrl).trim(),
+  };
+  res.json({ ok: true, ...appVersionConfig });
+});
+
 // Live Developer Command Center APIs (Real Neon PostgreSQL Telemetry & Moderation)
 app.get("/api/admin/overview", requireAdminPin, async (_req, res) => {
   const dbStart = Date.now();

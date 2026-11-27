@@ -1,10 +1,16 @@
 import React, { useEffect, useState } from "react";
-import { Alert, Share, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, Share, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
 import { COLORS } from "../../theme";
 import { useApp } from "../../store/AppContext";
+import { apiFetch } from "../../services/api";
 import { devTelemetry } from "../../services/devTelemetry";
+import {
+  applyOtaUpdateNow,
+  checkAndDownloadOtaUpdate,
+  getOtaMetadata,
+} from "../../services/otaUpdates";
 
 interface StorageRow {
   key: string;
@@ -33,8 +39,48 @@ export default function DevToolsPanel({ onToast }: { onToast: (msg: string) => v
   const [showPin, setShowPin] = useState(false);
   const [storageRows, setStorageRows] = useState<StorageRow[]>([]);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const [checkingOta, setCheckingOta] = useState(false);
+  const [otaStatusMsg, setOtaStatusMsg] = useState("");
+  const [otaReadyToReload, setOtaReadyToReload] = useState(false);
+  const [remoteVer, setRemoteVer] = useState("1.0.0");
+  const [remoteNotes, setRemoteNotes] = useState("تحديث جديد وميزات رائعة في SHAHINAZ 🚀");
+  const [remoteForce, setRemoteForce] = useState(false);
+  const [savingRemoteVer, setSavingRemoteVer] = useState(false);
 
   const specs = devTelemetry.getDeviceSpecs();
+  const otaMeta = getOtaMetadata();
+
+  async function handleCheckOtaNow() {
+    setCheckingOta(true);
+    setOtaStatusMsg("");
+    const res = await checkAndDownloadOtaUpdate();
+    setOtaStatusMsg(res.message);
+    setOtaReadyToReload(res.status === "ready");
+    onToast(res.status === "ready" ? "⚡ تم تحميل التحديث وجاهز للتثبيت!" : res.message);
+    setCheckingOta(false);
+  }
+
+  async function handlePublishRemoteVersion() {
+    if (!remoteVer.trim()) return;
+    setSavingRemoteVer(true);
+    try {
+      await apiFetch("/api/admin/app/version", null, {
+        method: "POST",
+        headers: { "x-admin-pin": adminPin },
+        body: JSON.stringify({
+          latestVersion: remoteVer.trim(),
+          minVersion: remoteForce ? remoteVer.trim() : "1.0.0",
+          forceUpdate: remoteForce,
+          releaseNotes: remoteNotes.trim(),
+        }),
+      });
+      onToast(`🚀 تم نشر إشعار الإصدار v${remoteVer.trim()} على السيرفر!`);
+    } catch (e) {
+      Alert.alert("تنبيه", e instanceof Error ? e.message : "تعذر تحديث رقم الإصدار على السيرفر");
+    } finally {
+      setSavingRemoteVer(false);
+    }
+  }
 
   async function scanStorage() {
     try {
@@ -62,6 +108,88 @@ export default function DevToolsPanel({ onToast }: { onToast: (msg: string) => v
 
   return (
     <View style={{ gap: 12 }}>
+      {/* Live Automatic OTA Updates & Remote Version Control */}
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>🚀 نظام التحديث التلقائي (OTA Auto-Update)</Text>
+        <View style={styles.specsGrid}>
+          <View style={styles.specBox}>
+            <Text style={styles.specVal}>{otaMeta.channel}</Text>
+            <Text style={styles.specLbl}>قناة التحديث</Text>
+          </View>
+          <View style={styles.specBox}>
+            <Text style={styles.specVal}>v{otaMeta.runtimeVersion}</Text>
+            <Text style={styles.specLbl}>Runtime</Text>
+          </View>
+          <View style={styles.specBox}>
+            <Text style={styles.specVal}>{otaMeta.isEmbeddedLaunch ? "APK أساسي" : "تحديث OTA ⚡"}</Text>
+            <Text style={styles.specLbl}>مصدر التشغيل</Text>
+          </View>
+          <View style={styles.specBox}>
+            <Text style={styles.specVal}>{otaMeta.updateId}</Text>
+            <Text style={styles.specLbl}>معرّف النسخة</Text>
+          </View>
+        </View>
+
+        {!!otaStatusMsg && (
+          <Text style={{ color: otaReadyToReload ? COLORS.success : COLORS.verified, fontSize: 12, fontWeight: "700", textAlign: "right" }}>
+            {otaStatusMsg}
+          </Text>
+        )}
+
+        <TouchableOpacity style={styles.primaryBtn} onPress={handleCheckOtaNow} disabled={checkingOta}>
+          {checkingOta ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : (
+            <Text style={{ color: "#fff", fontWeight: "800", fontSize: 13 }}>🔄 فحص وتحميل التحديث التلقائي الآن</Text>
+          )}
+        </TouchableOpacity>
+
+        {otaReadyToReload && (
+          <TouchableOpacity
+            style={[styles.primaryBtn, { backgroundColor: COLORS.success }]}
+            onPress={applyOtaUpdateNow}
+          >
+            <Text style={{ color: "#fff", fontWeight: "800", fontSize: 13 }}>⚡ تطبيق التحديث وإعادة التشغيل فوراً</Text>
+          </TouchableOpacity>
+        )}
+
+        <Text style={[styles.sub, { marginTop: 4 }]}>
+          📢 إشعار نسخة APK / Google Play كبرى (يظهر لجميع المستخدمين):
+        </Text>
+        <TextInput
+          style={styles.input}
+          placeholder="رقم الإصدار الجديد (مثال: 1.1.0)"
+          placeholderTextColor={COLORS.muted}
+          value={remoteVer}
+          onChangeText={setRemoteVer}
+        />
+        <TextInput
+          style={styles.input}
+          placeholder="ما الجديد في هذا الإصدار؟"
+          placeholderTextColor={COLORS.muted}
+          value={remoteNotes}
+          onChangeText={setRemoteNotes}
+        />
+        <TouchableOpacity activeOpacity={0.75} style={styles.toggleRow} onPress={() => setRemoteForce((v) => !v)}>
+          <Switch value={remoteForce} onValueChange={setRemoteForce} />
+          <View style={{ flex: 1, alignItems: "flex-end", paddingLeft: 10 }}>
+            <Text style={styles.toggleLabel}>تحديث إجباري (إخفاء زر لاحقاً)</Text>
+            <Text style={styles.toggleSub}>يطلب من المستخدم تحميل النسخة الجديدة فوراً</Text>
+          </View>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.primaryBtn, { backgroundColor: COLORS.verified }]}
+          onPress={handlePublishRemoteVersion}
+          disabled={savingRemoteVer}
+        >
+          {savingRemoteVer ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : (
+            <Text style={{ color: "#fff", fontWeight: "800", fontSize: 12.5 }}>نشر إشعار النسخة الجديدة على السيرفر 🚀</Text>
+          )}
+        </TouchableOpacity>
+      </View>
+
       {/* Live Floating Developer HUD Toggle + Kill Switches */}
       <View style={styles.card}>
         <Text style={styles.cardTitle}>⚡ مفاتيح التحكم الحية وشريط المطور</Text>

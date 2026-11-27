@@ -8,6 +8,7 @@ import { AppProvider, useApp } from "./src/store/AppContext";
 import { devTelemetry } from "./src/services/devTelemetry";
 import AppErrorBoundary from "./src/components/AppErrorBoundary";
 import DevHudOverlay from "./src/components/DevHudOverlay";
+import UpdateBanner from "./src/components/UpdateBanner";
 import AdminScreen from "./src/screens/AdminScreen";
 import AuthScreen from "./src/screens/AuthScreen";
 import FeedScreen from "./src/screens/FeedScreen";
@@ -36,6 +37,7 @@ function MainApp() {
           onOpenAdmin={() => setHudAdminOpen(true)}
           onHideHud={adminToggleDevHud}
         />
+        <UpdateBanner />
         <AuthScreen />
         <Modal visible={hudAdminOpen} animationType="slide" onRequestClose={() => setHudAdminOpen(false)}>
           <AdminScreen onClose={() => setHudAdminOpen(false)} />
@@ -52,6 +54,7 @@ function MainApp() {
         onOpenAdmin={() => setHudAdminOpen(true)}
         onHideHud={adminToggleDevHud}
       />
+      <UpdateBanner />
       <View style={styles.body}>
         {tab === "feed" && <FeedScreen />}
         {tab === "explore" && <ExploreScreen />}

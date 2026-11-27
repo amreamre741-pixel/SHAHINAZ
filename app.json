@@ -13,6 +13,15 @@
       "resizeMode": "contain",
       "backgroundColor": "#0f172a"
     },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0,
+      "url": "https://u.expo.dev/c5558cb5-f819-4663-83eb-ee9c1963a68c"
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.shahinaz.app"
