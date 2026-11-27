@@ -1,10 +1,14 @@
-import React, { useState } from "react";
-import { Platform, StatusBar as RNStatusBar, StyleSheet, TouchableOpacity, View } from "react-native";
+import React, { useEffect, useState } from "react";
+import { Modal, Platform, StatusBar as RNStatusBar, StyleSheet, TouchableOpacity, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
 import { COLORS } from "./src/theme";
 import { AppProvider, useApp } from "./src/store/AppContext";
+import { devTelemetry } from "./src/services/devTelemetry";
+import AppErrorBoundary from "./src/components/AppErrorBoundary";
+import DevHudOverlay from "./src/components/DevHudOverlay";
+import AdminScreen from "./src/screens/AdminScreen";
 import AuthScreen from "./src/screens/AuthScreen";
 import FeedScreen from "./src/screens/FeedScreen";
 import ExploreScreen from "./src/screens/ExploreScreen";
@@ -15,14 +19,27 @@ import ProfileScreen from "./src/screens/ProfileScreen";
 type Tab = "feed" | "explore" | "create" | "messages" | "profile";
 
 function MainApp() {
-  const { currentUser } = useApp();
+  const { currentUser, devHudEnabled, adminToggleDevHud } = useApp();
   const [tab, setTab] = useState<Tab>("feed");
+  const [hudAdminOpen, setHudAdminOpen] = useState(false);
+
+  useEffect(() => {
+    devTelemetry.installGlobalHooks();
+  }, []);
 
   if (!currentUser) {
     return (
       <SafeAreaView style={styles.root} edges={["top", "bottom"]}>
         <StatusBar style="light" backgroundColor={COLORS.bg} translucent={false} />
+        <DevHudOverlay
+          visible={devHudEnabled}
+          onOpenAdmin={() => setHudAdminOpen(true)}
+          onHideHud={adminToggleDevHud}
+        />
         <AuthScreen />
+        <Modal visible={hudAdminOpen} animationType="slide" onRequestClose={() => setHudAdminOpen(false)}>
+          <AdminScreen onClose={() => setHudAdminOpen(false)} />
+        </Modal>
       </SafeAreaView>
     );
   }
@@ -30,6 +47,11 @@ function MainApp() {
   return (
     <SafeAreaView style={styles.root} edges={["top", "bottom"]}>
       <StatusBar style="light" backgroundColor={COLORS.bg} translucent={false} />
+      <DevHudOverlay
+        visible={devHudEnabled}
+        onOpenAdmin={() => setHudAdminOpen(true)}
+        onHideHud={adminToggleDevHud}
+      />
       <View style={styles.body}>
         {tab === "feed" && <FeedScreen />}
         {tab === "explore" && <ExploreScreen />}
@@ -64,6 +86,10 @@ function MainApp() {
           <Ionicons name={tab === "profile" ? "person-circle" : "person-circle-outline"} size={27} color={tab === "profile" ? COLORS.text : COLORS.muted} />
         </TouchableOpacity>
       </View>
+
+      <Modal visible={hudAdminOpen} animationType="slide" onRequestClose={() => setHudAdminOpen(false)}>
+        <AdminScreen onClose={() => setHudAdminOpen(false)} />
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -71,9 +97,11 @@ function MainApp() {
 export default function App() {
   return (
     <SafeAreaProvider>
-      <AppProvider>
-        <MainApp />
-      </AppProvider>
+      <AppErrorBoundary>
+        <AppProvider>
+          <MainApp />
+        </AppProvider>
+      </AppErrorBoundary>
     </SafeAreaProvider>
   );
 }

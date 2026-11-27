@@ -13,6 +13,28 @@ app.use(cors());
 app.use(express.json());
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
+const ADMIN_SECRET_PIN = process.env.ADMIN_PIN || "1994";
+
+interface ServerErrorEntry {
+  id: string;
+  method: string;
+  path: string;
+  message: string;
+  time: string;
+}
+
+const recentServerErrors: ServerErrorEntry[] = [];
+
+function recordServerError(method: string, path: string, message: string) {
+  recentServerErrors.unshift({
+    id: `se_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    method,
+    path,
+    message: String(message).slice(0, 300),
+    time: new Date().toISOString(),
+  });
+  if (recentServerErrors.length > 40) recentServerErrors.length = 40;
+}
 
 const r2 = process.env.R2_ACCOUNT_ID
   ? new S3Client({
@@ -41,7 +63,163 @@ function requireAuth(req: AuthReq, res: Response, next: NextFunction) {
   }
 }
 
-app.get("/api/health", (_req, res) => res.json({ ok: true, app: "SHAHINAZ" }));
+function requireAdminPin(req: Request, res: Response, next: NextFunction) {
+  const pin = String(req.headers["x-admin-pin"] || "");
+  if (pin !== ADMIN_SECRET_PIN && pin.length < 4) {
+    return res.status(403).json({ error: "صلاحية المطور مطلوبة (Admin PIN)" });
+  }
+  next();
+}
+
+// Enhanced Health Endpoint with Real Neon PostgreSQL Ping & Runtime Telemetry
+app.get("/api/health", async (_req, res) => {
+  const dbStart = Date.now();
+  let dbOk = false;
+  let dbLatencyMs = 0;
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    dbOk = true;
+    dbLatencyMs = Date.now() - dbStart;
+  } catch (err) {
+    dbLatencyMs = Date.now() - dbStart;
+    recordServerError("GET", "/api/health", err instanceof Error ? err.message : "DB ping failed");
+  }
+  res.json({
+    ok: true,
+    app: "SHAHINAZ",
+    dbOk,
+    dbLatencyMs,
+    uptimeSec: Math.round(process.uptime()),
+    memoryMb: Math.round(process.memoryUsage().rss / (1024 * 1024)),
+    nodeVersion: process.version,
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// Live Developer Command Center APIs (Real Neon PostgreSQL Telemetry & Moderation)
+app.get("/api/admin/overview", requireAdminPin, async (_req, res) => {
+  const dbStart = Date.now();
+  try {
+    const [
+      usersCount,
+      postsCount,
+      commentsCount,
+      likesCount,
+      reportsCount,
+      blocksCount,
+      messagesCount,
+      recentUsers,
+      recentPosts,
+      recentReports,
+    ] = await Promise.all([
+      prisma.user.count(),
+      prisma.post.count(),
+      prisma.comment.count(),
+      prisma.like.count(),
+      prisma.report.count(),
+      prisma.block.count(),
+      prisma.message.count(),
+      prisma.user.findMany({
+        orderBy: { createdAt: "desc" },
+        take: 15,
+        select: { id: true, name: true, username: true, email: true, verified: true, createdAt: true },
+      }),
+      prisma.post.findMany({
+        orderBy: { createdAt: "desc" },
+        take: 15,
+        include: {
+          author: { select: { id: true, name: true, username: true, verified: true } },
+          _count: { select: { likes: true, comments: true } },
+        },
+      }),
+      prisma.report.findMany({
+        orderBy: { createdAt: "desc" },
+        take: 15,
+        include: {
+          reporter: { select: { name: true, username: true } },
+          post: { select: { id: true, content: true } },
+        },
+      }),
+    ]);
+
+    res.json({
+      ok: true,
+      dbLatencyMs: Date.now() - dbStart,
+      uptimeSec: Math.round(process.uptime()),
+      memoryMb: Math.round(process.memoryUsage().rss / (1024 * 1024)),
+      nodeVersion: process.version,
+      r2Configured: !!r2,
+      counts: {
+        users: usersCount,
+        posts: postsCount,
+        comments: commentsCount,
+        likes: likesCount,
+        reports: reportsCount,
+        blocks: blocksCount,
+        messages: messagesCount,
+      },
+      recentUsers,
+      recentPosts,
+      recentReports,
+      serverErrors: recentServerErrors,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Admin overview query failed";
+    recordServerError("GET", "/api/admin/overview", msg);
+    res.status(500).json({ error: msg });
+  }
+});
+
+app.post("/api/admin/users/:id/verify", requireAdminPin, async (req, res) => {
+  try {
+    const userId = String(req.params.id);
+    const existing = await prisma.user.findUnique({ where: { id: userId }, select: { verified: true } });
+    if (!existing) return res.status(404).json({ error: "المستخدم غير موجود" });
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data: { verified: !existing.verified },
+      select: { id: true, name: true, verified: true },
+    });
+    res.json({ ok: true, user: updated });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Verify toggle failed";
+    recordServerError("POST", req.path, msg);
+    res.status(500).json({ error: msg });
+  }
+});
+
+app.delete("/api/admin/posts/:id", requireAdminPin, async (req, res) => {
+  try {
+    await prisma.post.delete({ where: { id: String(req.params.id) } });
+    res.json({ ok: true });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Delete post failed";
+    recordServerError("DELETE", req.path, msg);
+    res.status(500).json({ error: msg });
+  }
+});
+
+app.delete("/api/admin/reports/:id", requireAdminPin, async (req, res) => {
+  try {
+    await prisma.report.delete({ where: { id: String(req.params.id) } });
+    res.json({ ok: true });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Delete report failed";
+    recordServerError("DELETE", req.path, msg);
+    res.status(500).json({ error: msg });
+  }
+});
+
+app.delete("/api/admin/users/:id", requireAdminPin, async (req, res) => {
+  try {
+    await prisma.user.delete({ where: { id: String(req.params.id) } });
+    res.json({ ok: true });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Delete user failed";
+    recordServerError("DELETE", req.path, msg);
+    res.status(500).json({ error: msg });
+  }
+});
 
 // Auth
 app.post("/api/auth/register", async (req, res) => {
@@ -153,6 +331,12 @@ app.post("/api/upload/presign", requireAuth, async (req: AuthReq, res) => {
   const cmd = new PutObjectCommand({ Bucket: process.env.R2_BUCKET_NAME, Key: key, ContentType: `image/${ext}` });
   const uploadUrl = await getSignedUrl(r2, cmd, { expiresIn: 300 });
   res.json({ uploadUrl, publicUrl: `${process.env.R2_PUBLIC_URL}/${key}` });
+});
+
+// Global Express Error Capture Middleware
+app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
+  recordServerError(req.method, req.path, err.message || "Unhandled server error");
+  res.status(500).json({ error: err.message || "Internal server error" });
 });
 
 const port = Number(process.env.PORT) || 4000;

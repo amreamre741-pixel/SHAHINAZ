@@ -85,6 +85,7 @@ interface AppContextValue {
   allowRegistration: boolean;
   marketEnabled: boolean;
   audioRoomsEnabled: boolean;
+  devHudEnabled: boolean;
   adminPin: string;
   bannedWords: string[];
   adminLogs: AdminLogItem[];
@@ -140,6 +141,7 @@ interface AppContextValue {
   adminToggleRegistration: () => void;
   adminToggleMarket: () => void;
   adminToggleAudioRooms: () => void;
+  adminToggleDevHud: () => void;
   adminClearLogs: () => void;
   adminResetSystemSettings: () => void;
 }
@@ -408,11 +410,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [allowRegistration, setAllowRegistration] = useState<boolean>(true);
   const [marketEnabled, setMarketEnabled] = useState<boolean>(true);
   const [audioRoomsEnabled, setAudioRoomsEnabled] = useState<boolean>(true);
+  const [devHudEnabled, setDevHudEnabled] = useState<boolean>(false);
   const [adminPin, setAdminPin] = useState<string>("1994");
   const [bannedWords, setBannedWords] = useState<string[]>(["احتيال", "سبام"]);
   const [rolePermissions, setRolePermissions] = useState<Record<UserRole, RolePermissions>>(DEFAULT_ROLE_PERMISSIONS);
   const [adminLogs, setAdminLogs] = useState<AdminLogItem[]>([
-    { id: "lg_1", action: "تشغيل نظام إدارة SHAHINAZ Super-Admin", time: "اليوم" },
+    { id: "lg_1", action: "تشغيل نظام إدارة SHAHINAZ DevOS v2.0", time: "اليوم" },
   ]);
   const adminLoadedRef = useRef(false);
 
@@ -476,6 +479,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           if (typeof cfg.allowRegistration === "boolean") setAllowRegistration(cfg.allowRegistration);
           if (typeof cfg.marketEnabled === "boolean") setMarketEnabled(cfg.marketEnabled);
           if (typeof cfg.audioRoomsEnabled === "boolean") setAudioRoomsEnabled(cfg.audioRoomsEnabled);
+          if (typeof cfg.devHudEnabled === "boolean") setDevHudEnabled(cfg.devHudEnabled);
           if (Array.isArray(cfg.bannedWords)) setBannedWords(cfg.bannedWords);
           if (cfg.rolePermissions) setRolePermissions({ ...DEFAULT_ROLE_PERMISSIONS, ...cfg.rolePermissions });
         }
@@ -503,11 +507,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         allowRegistration,
         marketEnabled,
         audioRoomsEnabled,
+        devHudEnabled,
         bannedWords,
         rolePermissions,
       })
     ).catch(() => {});
-  }, [announcement, maintenanceMode, allowRegistration, marketEnabled, audioRoomsEnabled, bannedWords, rolePermissions]);
+  }, [announcement, maintenanceMode, allowRegistration, marketEnabled, audioRoomsEnabled, devHudEnabled, bannedWords, rolePermissions]);
 
   function login(name: string, username: string) {
     setCurrentUser({
@@ -1042,6 +1047,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     pushAdminLog("تغيير حالة الغرف الصوتية");
   }
 
+  function adminToggleDevHud() {
+    setDevHudEnabled((v) => !v);
+    pushAdminLog("تبديل شريط المراقبة العائم (Dev HUD) 🖥️");
+  }
+
   function adminClearLogs() {
     setAdminLogs([{ id: `lg_${Date.now()}`, action: "تم مسح سجل النشاط السابق", time: "الآن" }]);
   }
@@ -1051,6 +1061,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setAllowRegistration(true);
     setMarketEnabled(true);
     setAudioRoomsEnabled(true);
+    setDevHudEnabled(false);
     setAnnouncement("");
     setRolePermissions(DEFAULT_ROLE_PERMISSIONS);
     pushAdminLog("إعادة ضبط إعدادات النظام للوضع الافتراضي 🔄");
@@ -1090,6 +1101,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         allowRegistration,
         marketEnabled,
         audioRoomsEnabled,
+        devHudEnabled,
         adminPin,
         bannedWords,
         adminLogs,
@@ -1145,6 +1157,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         adminToggleRegistration,
         adminToggleMarket,
         adminToggleAudioRooms,
+        adminToggleDevHud,
         adminClearLogs,
         adminResetSystemSettings,
       }}

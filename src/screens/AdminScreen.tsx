@@ -1,6 +1,5 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   Image,
   ScrollView,
@@ -16,9 +15,14 @@ import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { COLORS } from "../theme";
 import { useApp } from "../store/AppContext";
+import { useDevTelemetry } from "../services/devTelemetry";
 import type { RolePermissions, UserRole } from "../types";
+import DiagnosticsPanel from "../components/admin/DiagnosticsPanel";
+import NetworkPanel from "../components/admin/NetworkPanel";
+import CloudServerPanel from "../components/admin/CloudServerPanel";
+import DevToolsPanel from "../components/admin/DevToolsPanel";
 
-type AdminTab = "overview" | "users" | "permissions" | "content" | "safety" | "system";
+type AdminTab = "overview" | "diagnostics" | "network" | "cloud" | "users" | "permissions" | "content" | "tools";
 
 const ROLES: { key: UserRole; label: string; color: string }[] = [
   { key: "ADMIN", label: "👑 مطور", color: "#a855f7" },
@@ -36,8 +40,6 @@ const PERMISSION_META: { key: keyof RolePermissions; title: string; sub: string 
   { key: "canModerateContent", title: "صلاحيات الإشراف والأمان", sub: "مراجعة البلاغات وحذف المحتوى المخالف" },
 ];
 
-const API_HEALTH_URL = (process.env.EXPO_PUBLIC_API_URL || "https://shahinaz.onrender.com") + "/api/health";
-
 export default function AdminScreen({ onClose }: { onClose: () => void }) {
   const {
     currentUser,
@@ -50,10 +52,8 @@ export default function AdminScreen({ onClose }: { onClose: () => void }) {
     blockedUserIds,
     announcement,
     maintenanceMode,
-    allowRegistration,
     marketEnabled,
     audioRoomsEnabled,
-    adminPin,
     bannedWords,
     adminLogs,
     rolePermissions,
@@ -71,17 +71,13 @@ export default function AdminScreen({ onClose }: { onClose: () => void }) {
     adminCloseAudioRoom,
     adminAddBannedWord,
     adminRemoveBannedWord,
-    adminChangePin,
     adminSetAnnouncement,
-    adminToggleMaintenance,
-    adminToggleRegistration,
-    adminToggleMarket,
-    adminToggleAudioRooms,
     adminClearLogs,
-    adminResetSystemSettings,
     blockUser,
     unblockUser,
   } = useApp();
+
+  const { errors, networkLogs } = useDevTelemetry();
 
   const [tab, setTab] = useState<AdminTab>("overview");
   const [userSearch, setUserSearch] = useState("");
@@ -89,17 +85,13 @@ export default function AdminScreen({ onClose }: { onClose: () => void }) {
   const [bannerInput, setBannerInput] = useState(announcement);
   const [pushInput, setPushInput] = useState("");
   const [wordInput, setWordInput] = useState("");
-  const [newPin, setNewPin] = useState("");
-  const [showPin, setShowPin] = useState(false);
-  const [pinging, setPinging] = useState(false);
-  const [serverStatus, setServerStatus] = useState<{ ok: boolean; msg: string } | null>(null);
   const [toastMsg, setToastMsg] = useState("");
-  const toastTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function showToast(msg: string) {
     setToastMsg(msg);
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-    toastTimerRef.current = setTimeout(() => setToastMsg(""), 2400);
+    toastTimerRef.current = setTimeout(() => setToastMsg(""), 2600);
   }
 
   const filteredUsers = useMemo(() => {
@@ -110,37 +102,29 @@ export default function AdminScreen({ onClose }: { onClose: () => void }) {
     );
   }, [allUsers, userSearch]);
 
-  async function testServerHealth() {
-    setPinging(true);
-    const start = Date.now();
-    try {
-      const res = await fetch(API_HEALTH_URL);
-      const ms = Date.now() - start;
-      if (res.ok) {
-        setServerStatus({ ok: true, msg: `السيرفر وقاعدة Neon يعملان بامتياز · ${ms} ms` });
-        showToast(`✅ السيرفر متصل وسريع (${ms} ms)`);
-      } else {
-        setServerStatus({ ok: false, msg: `استجابة غير مكتملة (HTTP ${res.status}) · ${ms} ms` });
-      }
-    } catch {
-      setServerStatus({ ok: false, msg: "تعذر الوصول إلى Render — قد يكون في وضع الاستيقاظ (Cold Start)" });
-    } finally {
-      setPinging(false);
-    }
-  }
+  const tabsList: { key: AdminTab; label: string; alert?: boolean }[] = [
+    { key: "overview", label: "📊 القيادة" },
+    { key: "diagnostics", label: `🐞 أخطاء (${errors.length})`, alert: errors.length > 0 },
+    { key: "network", label: `🌐 الشبكة (${networkLogs.length})` },
+    { key: "cloud", label: "☁️ السيرفر" },
+    { key: "users", label: `👥 الأعضاء (${allUsers.length})` },
+    { key: "permissions", label: "🛡️ الصلاحيات" },
+    { key: "content", label: `📝 المحتوى (${allPosts.length})` },
+    { key: "tools", label: "🧰 الأدوات" },
+  ];
 
   return (
     <SafeAreaView style={styles.screen} edges={["top", "bottom"]}>
-      {/* Luxury Super-Admin Header */}
+      {/* Luxury SHAHINAZ DevOS v2.0 Header */}
       <LinearGradient colors={["#1e1b4b", "#09090b", "#000000"]} style={styles.header}>
         <View style={styles.headerRow}>
           <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10 }}>
-            <LinearGradient colors={["#a855f7", "#ec4899"]} style={styles.badgeIcon}>
-              <Ionicons name="shield-checkmark" size={20} color="#fff" />
+            <LinearGradient colors={["#a855f7", "#ec4899", "#3897f0"]} style={styles.badgeIcon}>
+              <Ionicons name="terminal" size={20} color="#fff" />
             </LinearGradient>
             <View style={{ alignItems: "flex-end" }}>
-              <Text style={styles.title}>مركز قيادة المطور</Text>
-              <Text style={styles.subtitle}>SHAHINAZ Super-Admin · صلاحيات كاملة ومشفّرة</Text>
+              <Text style={styles.title}>SHAHINAZ DevOS v2.0</Text>
+              <Text style={styles.subtitle}>مركز قيادة المطور · كشف الأخطاء · Neon Cloud · أدوات متقدمة</Text>
             </View>
           </View>
           <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
@@ -148,22 +132,26 @@ export default function AdminScreen({ onClose }: { onClose: () => void }) {
           </TouchableOpacity>
         </View>
 
-        {/* All 6 Admin Tabs Visible in 3x2 Grid (No Hidden Tabs on Android RTL) */}
+        {/* All 8 Developer Modules Visible Simultaneously in Crisp 4x2 Grid */}
         <View style={styles.tabsGrid}>
-          {[
-            { key: "overview", label: "📊 القيادة" },
-            { key: "users", label: `👥 الأعضاء (${allUsers.length})` },
-            { key: "permissions", label: "🛡️ الصلاحيات" },
-            { key: "content", label: `📝 المحتوى (${allPosts.length})` },
-            { key: "safety", label: `🚩 الأمان (${reports.length})` },
-            { key: "system", label: "⚙️ النظام" },
-          ].map((t) => (
+          {tabsList.map((t) => (
             <TouchableOpacity
               key={t.key}
-              style={[styles.tabPill, tab === t.key && styles.tabPillActive]}
-              onPress={() => setTab(t.key as AdminTab)}
+              style={[
+                styles.tabPill,
+                tab === t.key && styles.tabPillActive,
+                t.alert && tab !== t.key && { borderColor: COLORS.danger },
+              ]}
+              onPress={() => setTab(t.key)}
             >
-              <Text style={[styles.tabText, tab === t.key && styles.tabTextActive]} numberOfLines={1}>
+              <Text
+                style={[
+                  styles.tabText,
+                  tab === t.key && styles.tabTextActive,
+                  t.alert && tab !== t.key && { color: COLORS.danger },
+                ]}
+                numberOfLines={1}
+              >
                 {t.label}
               </Text>
             </TouchableOpacity>
@@ -177,33 +165,49 @@ export default function AdminScreen({ onClose }: { onClose: () => void }) {
         )}
       </LinearGradient>
 
-      <ScrollView style={styles.body} contentContainerStyle={{ paddingBottom: 46 }} showsVerticalScrollIndicator={false}>
-        {/* 1. OVERVIEW TAB */}
+      <ScrollView style={styles.body} contentContainerStyle={{ paddingBottom: 48 }} showsVerticalScrollIndicator={false}>
+        {/* 1. COMMAND OVERVIEW */}
         {tab === "overview" && (
           <>
             <View style={styles.kpiGrid}>
+              <TouchableOpacity style={styles.kpiCard} onPress={() => setTab("diagnostics")}>
+                <Text style={[styles.kpiNum, { color: errors.length > 0 ? COLORS.danger : COLORS.success }]}>
+                  {errors.length}
+                </Text>
+                <Text style={styles.kpiLabel}>🐞 أخطاء مرصودة</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.kpiCard} onPress={() => setTab("network")}>
+                <Text style={[styles.kpiNum, { color: COLORS.verified }]}>{networkLogs.length}</Text>
+                <Text style={styles.kpiLabel}>🌐 طلبات الشبكة</Text>
+              </TouchableOpacity>
               <TouchableOpacity style={styles.kpiCard} onPress={() => setTab("users")}>
                 <Text style={styles.kpiNum}>{allUsers.length}</Text>
-                <Text style={styles.kpiLabel}>المستخدمون</Text>
+                <Text style={styles.kpiLabel}>👥 المستخدمون</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.kpiCard} onPress={() => setTab("content")}>
-                <Text style={styles.kpiNum}>{allPosts.length}</Text>
-                <Text style={styles.kpiLabel}>المنشورات</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.kpiCard} onPress={() => setTab("content")}>
-                <Text style={[styles.kpiNum, { color: COLORS.success }]}>{codOrders.length}</Text>
-                <Text style={styles.kpiLabel}>طلبات 58 ولاية</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.kpiCard} onPress={() => setTab("safety")}>
-                <Text style={[styles.kpiNum, { color: reports.length > 0 ? COLORS.danger : COLORS.verified }]}>
-                  {reports.length}
-                </Text>
-                <Text style={styles.kpiLabel}>البلاغات</Text>
+                <Text style={[styles.kpiNum, { color: COLORS.warn }]}>{codOrders.length}</Text>
+                <Text style={styles.kpiLabel}>🛍️ طلبات 58 ولاية</Text>
               </TouchableOpacity>
             </View>
 
-            {/* Quick System Health Strip (Tappable to jump to System tab) */}
-            <TouchableOpacity style={styles.statusStrip} activeOpacity={0.8} onPress={() => setTab("system")}>
+            {/* Quick Action Launchpad */}
+            <View style={styles.row}>
+              <TouchableOpacity style={styles.launchCard} onPress={() => setTab("diagnostics")}>
+                <Ionicons name="pulse" size={20} color={COLORS.success} />
+                <Text style={styles.launchTxt}>فحص الأخطاء</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.launchCard} onPress={() => setTab("cloud")}>
+                <Ionicons name="cloud-done-outline" size={20} color={COLORS.verified} />
+                <Text style={styles.launchTxt}>Neon السحابي</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.launchCard} onPress={() => setTab("tools")}>
+                <Ionicons name="construct-outline" size={20} color={COLORS.primary} />
+                <Text style={styles.launchTxt}>التخزين و HUD</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Quick System Health Strip */}
+            <TouchableOpacity style={styles.statusStrip} activeOpacity={0.8} onPress={() => setTab("tools")}>
               <View style={styles.statusPill}>
                 <View style={[styles.statusDot, { backgroundColor: maintenanceMode ? COLORS.warn : COLORS.success }]} />
                 <Text style={styles.statusPillText}>{maintenanceMode ? "صيانة" : "النشر نشط"}</Text>
@@ -306,7 +310,16 @@ export default function AdminScreen({ onClose }: { onClose: () => void }) {
           </>
         )}
 
-        {/* 2. USERS & ROLES TAB */}
+        {/* 2. ERROR DETECTION & 7-POINT DIAGNOSTICS */}
+        {tab === "diagnostics" && <DiagnosticsPanel onToast={showToast} />}
+
+        {/* 3. NETWORK MONITOR & BUILT-IN API TESTER */}
+        {tab === "network" && <NetworkPanel onToast={showToast} />}
+
+        {/* 4. LIVE NEON POSTGRESQL & RENDER SERVER CONTROL */}
+        {tab === "cloud" && <CloudServerPanel onToast={showToast} />}
+
+        {/* 5. USERS & ROLES */}
         {tab === "users" && (
           <>
             <TextInput
@@ -366,7 +379,6 @@ export default function AdminScreen({ onClose }: { onClose: () => void }) {
                     )}
                   </View>
 
-                  {/* Role Selector */}
                   <Text style={styles.smallLabel}>تعيين الرتبة (Role):</Text>
                   <View style={styles.rolesRow}>
                     {ROLES.map((r) => (
@@ -388,7 +400,6 @@ export default function AdminScreen({ onClose }: { onClose: () => void }) {
                     ))}
                   </View>
 
-                  {/* Quick Actions: Verify + Points */}
                   <View style={styles.row}>
                     <TouchableOpacity
                       style={styles.outlineBtn}
@@ -424,13 +435,13 @@ export default function AdminScreen({ onClose }: { onClose: () => void }) {
           </>
         )}
 
-        {/* 3. GRANULAR ROLE PERMISSIONS MATRIX TAB */}
+        {/* 6. GRANULAR ROLE PERMISSIONS MATRIX */}
         {tab === "permissions" && (
           <>
             <View style={styles.card}>
               <Text style={styles.cardTitle}>🛡️ مصفوفة الصلاحيات حسب الرتبة</Text>
               <Text style={styles.smallLabel}>
-                اختر رتبة وعدّل صلاحياتها الحقيقية داخل التطبيق — يتم تطبيقها فوراً!
+                اختر رتبة وعدّل صلاحياتها الحقيقية داخل التطبيق — يتم تطبيقها وحفظها فوراً!
               </Text>
               <View style={styles.rolesRow}>
                 {ROLES.map((r) => (
@@ -484,7 +495,7 @@ export default function AdminScreen({ onClose }: { onClose: () => void }) {
           </>
         )}
 
-        {/* 4. CONTENT, PIN, BOOST, MARKET, AUDIO ROOMS & ORDERS TAB */}
+        {/* 7. CONTENT, MODERATION, SAFETY REPORTS & AUTO-FILTER */}
         {tab === "content" && (
           <>
             <View style={styles.card}>
@@ -537,69 +548,15 @@ export default function AdminScreen({ onClose }: { onClose: () => void }) {
             </View>
 
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>🛍️ طلبات الدفع عند الاستلام ({codOrders.length})</Text>
-              {codOrders.length === 0 ? (
-                <Text style={styles.empty}>لا توجد طلبات مسجلة بعد.</Text>
-              ) : (
-                codOrders.map((o) => (
-                  <View key={o.id} style={styles.itemBox}>
-                    <Text style={styles.itemTitle}>
-                      {o.productTitle} — {o.priceDzd.toLocaleString("fr-DZ")} دج
-                    </Text>
-                    <Text style={styles.itemSub}>
-                      الزبون: {o.buyerName} · 📞 {o.phone} · 📍 {o.wilaya}
-                    </Text>
-                  </View>
-                ))
-              )}
-            </View>
-
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>🎙️ الغرف الصوتية المفتوحة ({audioRooms.length})</Text>
-              {audioRooms.length === 0 ? (
-                <Text style={styles.empty}>لا توجد غرف صوتية مفتوحة حالياً.</Text>
-              ) : (
-                audioRooms.map((r) => (
-                  <View key={r.id} style={styles.itemBox}>
-                    <Text style={styles.itemTitle}>{r.title}</Text>
-                    <View style={{ flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center" }}>
-                      <Text style={styles.itemSub}>المضيف: {r.hostName} · {r.listeners} مستمع</Text>
-                      <TouchableOpacity onPress={() => adminCloseAudioRoom(r.id)}>
-                        <Text style={{ color: COLORS.danger, fontWeight: "700", fontSize: 12 }}>إغلاق الغرفة ✕</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                ))
-              )}
-            </View>
-
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>🛒 منتجات السوق ({marketItems.length})</Text>
-              {marketItems.map((m) => (
-                <View key={m.id} style={styles.itemBox}>
-                  <View style={{ flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center" }}>
-                    <Text style={styles.itemTitle}>{m.title}</Text>
-                    <TouchableOpacity onPress={() => adminDeleteMarketItem(m.id)}>
-                      <Text style={{ color: COLORS.danger, fontWeight: "700", fontSize: 12 }}>حذف 🗑️</Text>
-                    </TouchableOpacity>
-                  </View>
-                  <Text style={styles.itemSub}>
-                    {m.priceDzd.toLocaleString("fr-DZ")} دج · {m.city} · {m.sellerName}
-                  </Text>
-                </View>
-              ))}
-            </View>
-          </>
-        )}
-
-        {/* 5. SAFETY, REPORTS, BLOCKED & AUTO-FILTER TAB */}
-        {tab === "safety" && (
-          <>
-            <View style={styles.card}>
               <View style={{ flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center" }}>
-                <Text style={styles.cardTitle}>🚩 مركز البلاغات (حماية Google Play)</Text>
+                <Text style={styles.cardTitle}>🚩 البلاغات وفلتر الكلمات ({reports.length})</Text>
                 {reports.length > 0 && (
-                  <TouchableOpacity onPress={adminClearAllReports}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      adminClearAllReports();
+                      showToast("✓ تم تصفير كل البلاغات");
+                    }}
+                  >
                     <Text style={{ color: COLORS.verified, fontSize: 11.5, fontWeight: "700" }}>تصفير الكل</Text>
                   </TouchableOpacity>
                 )}
@@ -616,10 +573,22 @@ export default function AdminScreen({ onClose }: { onClose: () => void }) {
                         {post ? `${post.author.name}: ${post.content}` : "منشور محذوف"}
                       </Text>
                       <View style={styles.row}>
-                        <TouchableOpacity style={styles.dangerBtn} onPress={() => adminDeletePost(rep.postId)}>
+                        <TouchableOpacity
+                          style={styles.dangerBtn}
+                          onPress={() => {
+                            adminDeletePost(rep.postId);
+                            showToast("🗑️ تم حذف المنشور المخالف");
+                          }}
+                        >
                           <Text style={styles.dangerText}>🗑️ حذف المنشور</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.outlineBtn} onPress={() => adminDismissReport(rep.id)}>
+                        <TouchableOpacity
+                          style={styles.outlineBtn}
+                          onPress={() => {
+                            adminDismissReport(rep.id);
+                            showToast("✓ تم تجاهل البلاغ");
+                          }}
+                        >
                           <Text style={styles.outlineText}>تجاهل ✓</Text>
                         </TouchableOpacity>
                       </View>
@@ -627,31 +596,9 @@ export default function AdminScreen({ onClose }: { onClose: () => void }) {
                   );
                 })
               )}
-            </View>
 
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>🚫 قائمة المحظورين ({blockedUserIds.length})</Text>
-              {blockedUserIds.length === 0 ? (
-                <Text style={styles.empty}>لا يوجد مستخدمون محظورون حالياً ✓</Text>
-              ) : (
-                blockedUserIds.map((uid) => {
-                  const u = allUsers.find((x) => x.id === uid);
-                  return (
-                    <View key={uid} style={styles.blockedRow}>
-                      <TouchableOpacity onPress={() => unblockUser(uid)}>
-                        <Text style={{ color: COLORS.success, fontWeight: "700", fontSize: 12 }}>فك الحظر</Text>
-                      </TouchableOpacity>
-                      <Text style={{ color: COLORS.text, fontWeight: "600", fontSize: 13 }}>
-                        {u ? `${u.name} (@${u.username})` : uid}
-                      </Text>
-                    </View>
-                  );
-                })
-              )}
-            </View>
-
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>🛡️ فلتر الكلمات المحظورة التلقائي (منشورات وتعليقات)</Text>
+              {/* Banned Words Auto-Filter */}
+              <Text style={[styles.smallLabel, { marginTop: 4 }]}>🛡️ فلتر الكلمات المحظورة (منشورات وتعليقات):</Text>
               <View style={styles.row}>
                 <TextInput
                   style={[styles.input, { flex: 1 }]}
@@ -663,7 +610,9 @@ export default function AdminScreen({ onClose }: { onClose: () => void }) {
                 <TouchableOpacity
                   style={[styles.primaryBtn, { flex: 0, paddingHorizontal: 16 }]}
                   onPress={() => {
+                    if (!wordInput.trim()) return;
                     adminAddBannedWord(wordInput);
+                    showToast(`🛡️ تمت إضافة "${wordInput.trim()}" إلى الفلتر`);
                     setWordInput("");
                   }}
                 >
@@ -675,193 +624,65 @@ export default function AdminScreen({ onClose }: { onClose: () => void }) {
                   <TouchableOpacity
                     key={w}
                     style={styles.wordPill}
-                    onPress={() => adminRemoveBannedWord(w)}
+                    onPress={() => {
+                      adminRemoveBannedWord(w);
+                      showToast(`تمت إزالة "${w}" من الفلتر`);
+                    }}
                   >
                     <Text style={{ color: COLORS.danger, fontSize: 12, fontWeight: "700" }}>{w} ✕</Text>
                   </TouchableOpacity>
                 ))}
               </View>
             </View>
+
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>🛍️ طلبات 58 ولاية ({codOrders.length}) · 🎙️ غرف ({audioRooms.length}) · 🛒 سوق ({marketItems.length})</Text>
+              {codOrders.map((o) => (
+                <View key={o.id} style={styles.itemBox}>
+                  <Text style={styles.itemTitle}>
+                    🛍️ {o.productTitle} — {o.priceDzd.toLocaleString("fr-DZ")} دج
+                  </Text>
+                  <Text style={styles.itemSub}>
+                    {o.buyerName} · 📞 {o.phone} · 📍 {o.wilaya}
+                  </Text>
+                </View>
+              ))}
+              {audioRooms.map((r) => (
+                <View key={r.id} style={styles.itemBox}>
+                  <View style={{ flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center" }}>
+                    <Text style={styles.itemTitle}>🎙️ {r.title}</Text>
+                    <TouchableOpacity
+                      onPress={() => {
+                        adminCloseAudioRoom(r.id);
+                        showToast("🔇 تم إغلاق الغرفة الصوتية");
+                      }}
+                    >
+                      <Text style={{ color: COLORS.danger, fontWeight: "700", fontSize: 11.5 }}>إغلاق ✕</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))}
+              {marketItems.map((m) => (
+                <View key={m.id} style={styles.itemBox}>
+                  <View style={{ flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center" }}>
+                    <Text style={styles.itemTitle}>🛒 {m.title}</Text>
+                    <TouchableOpacity
+                      onPress={() => {
+                        adminDeleteMarketItem(m.id);
+                        showToast("🗑️ تم حذف المنتج من السوق");
+                      }}
+                    >
+                      <Text style={{ color: COLORS.danger, fontWeight: "700", fontSize: 11.5 }}>حذف 🗑️</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))}
+            </View>
           </>
         )}
 
-        {/* 6. SYSTEM KILL-SWITCHES, SERVER DIAGNOSTICS & VAULT SECURITY TAB */}
-        {tab === "system" && (
-          <>
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>⚡ مفاتيح التحكم الحية (Kill Switches)</Text>
-              <TouchableOpacity
-                activeOpacity={0.75}
-                style={styles.toggleRow}
-                onPress={() => {
-                  adminToggleMaintenance();
-                  showToast(!maintenanceMode ? "⚡ تم تفعيل وضع الصيانة (توقف النشر)" : "✅ تم إيقاف الصيانة وعودة النشر");
-                }}
-              >
-                <Switch
-                  value={maintenanceMode}
-                  onValueChange={() => {
-                    adminToggleMaintenance();
-                    showToast(!maintenanceMode ? "⚡ تم تفعيل وضع الصيانة (توقف النشر)" : "✅ تم إيقاف الصيانة وعودة النشر");
-                  }}
-                />
-                <View style={{ flex: 1, alignItems: "flex-end", paddingLeft: 10 }}>
-                  <Text style={styles.toggleLabel}>وضع الصيانة (إيقاف النشر)</Text>
-                  <Text style={styles.toggleSub}>تجميد النشر مؤقتاً أثناء التحديثات</Text>
-                </View>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                activeOpacity={0.75}
-                style={styles.toggleRow}
-                onPress={() => {
-                  adminToggleRegistration();
-                  showToast(!allowRegistration ? "✅ تم فتح التسجيل للحسابات الجديدة" : "🔒 تم إغلاق التسجيل الجديد مؤقتاً");
-                }}
-              >
-                <Switch
-                  value={allowRegistration}
-                  onValueChange={() => {
-                    adminToggleRegistration();
-                    showToast(!allowRegistration ? "✅ تم فتح التسجيل للحسابات الجديدة" : "🔒 تم إغلاق التسجيل الجديد مؤقتاً");
-                  }}
-                />
-                <View style={{ flex: 1, alignItems: "flex-end", paddingLeft: 10 }}>
-                  <Text style={styles.toggleLabel}>السماح بالتسجيل الجديد</Text>
-                  <Text style={styles.toggleSub}>فتح أو إغلاق إنشاء حسابات جديدة</Text>
-                </View>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                activeOpacity={0.75}
-                style={styles.toggleRow}
-                onPress={() => {
-                  adminToggleMarket();
-                  showToast(!marketEnabled ? "🛒 تم تفعيل قسم السوق" : "🔒 تم إيقاف قسم السوق مؤقتاً");
-                }}
-              >
-                <Switch
-                  value={marketEnabled}
-                  onValueChange={() => {
-                    adminToggleMarket();
-                    showToast(!marketEnabled ? "🛒 تم تفعيل قسم السوق" : "🔒 تم إيقاف قسم السوق مؤقتاً");
-                  }}
-                />
-                <View style={{ flex: 1, alignItems: "flex-end", paddingLeft: 10 }}>
-                  <Text style={styles.toggleLabel}>تفعيل السوق (Marketplace)</Text>
-                  <Text style={styles.toggleSub}>إظهار أو إيقاف قسم البيع والشراء</Text>
-                </View>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                activeOpacity={0.75}
-                style={styles.toggleRow}
-                onPress={() => {
-                  adminToggleAudioRooms();
-                  showToast(!audioRoomsEnabled ? "🎙️ تم تفعيل الغرف الصوتية" : "🔇 تم إيقاف الغرف الصوتية مؤقتاً");
-                }}
-              >
-                <Switch
-                  value={audioRoomsEnabled}
-                  onValueChange={() => {
-                    adminToggleAudioRooms();
-                    showToast(!audioRoomsEnabled ? "🎙️ تم تفعيل الغرف الصوتية" : "🔇 تم إيقاف الغرف الصوتية مؤقتاً");
-                  }}
-                />
-                <View style={{ flex: 1, alignItems: "flex-end", paddingLeft: 10 }}>
-                  <Text style={styles.toggleLabel}>تفعيل الغرف الصوتية 🎙️</Text>
-                  <Text style={styles.toggleSub}>تشغيل أو إيقاف القعدات الصوتية</Text>
-                </View>
-              </TouchableOpacity>
-            </View>
-
-            {/* Live Server & Neon Health Diagnostics */}
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>🌐 فحص السيرفر وقاعدة البيانات (Render + Neon)</Text>
-              <Text style={styles.smallLabel}>API: https://shahinaz.onrender.com/api/health · DB: Neon</Text>
-              {serverStatus && (
-                <View
-                  style={[
-                    styles.healthBox,
-                    { borderColor: serverStatus.ok ? COLORS.success : COLORS.danger },
-                  ]}
-                >
-                  <Text style={{ color: serverStatus.ok ? COLORS.success : COLORS.danger, fontSize: 12, fontWeight: "700", textAlign: "right" }}>
-                    {serverStatus.ok ? "✅ " : "⚠️ "}
-                    {serverStatus.msg}
-                  </Text>
-                </View>
-              )}
-              <TouchableOpacity style={styles.outlineBtn} onPress={testServerHealth} disabled={pinging}>
-                {pinging ? (
-                  <ActivityIndicator size="small" color={COLORS.primary} />
-                ) : (
-                  <Text style={styles.outlineText}>⚡ فحص سرعة الاتصال الآن</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-
-            {/* Developer Vault Security PIN */}
-            <View style={styles.card}>
-              <View style={{ flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center" }}>
-                <Text style={styles.cardTitle}>🔐 بوابة المطور السرية</Text>
-                <TouchableOpacity onPress={() => setShowPin((v) => !v)} style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                  <Ionicons name={showPin ? "eye-off-outline" : "eye-outline"} size={16} color={COLORS.muted} />
-                  <Text style={{ color: COLORS.muted, fontSize: 12, fontWeight: "700" }}>
-                    {showPin ? adminPin : "•".repeat(adminPin.length)}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-              <Text style={styles.smallLabel}>
-                طرق الدخول المخفية: اضغط مطولاً على شعار SHAHINAZ في الرئيسية، أو اضغط 5 مرات على رقم الإصدار داخل الإعدادات.
-              </Text>
-              <TextInput
-                style={styles.input}
-                placeholder="أدخل الرمز السري الجديد (4 أرقام أو أكثر)"
-                placeholderTextColor={COLORS.muted}
-                keyboardType="number-pad"
-                secureTextEntry
-                value={newPin}
-                onChangeText={setNewPin}
-              />
-              <TouchableOpacity
-                style={styles.primaryBtn}
-                onPress={() => {
-                  const digits = newPin.trim().replace(/\D/g, "");
-                  if (digits.length < 4) {
-                    Alert.alert("تنبيه", "يجب أن يتكون الرمز من 4 أرقام على الأقل.");
-                    return;
-                  }
-                  adminChangePin(digits);
-                  setNewPin("");
-                  showToast("🔐 تم تحديث رمز البوابة السري وحفظه بنجاح!");
-                }}
-              >
-                <Text style={styles.btnText}>تحديث رمز البوابة السري</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Reset System Settings */}
-            <TouchableOpacity
-              style={styles.dangerBtn}
-              onPress={() =>
-                Alert.alert("إعادة ضبط الإعدادات", "سيتم إعادة تفعيل جميع الأقسام والصلاحيات للوضع الافتراضي.", [
-                  { text: "إلغاء", style: "cancel" },
-                  {
-                    text: "نعم، إعادة ضبط",
-                    style: "destructive",
-                    onPress: () => {
-                      adminResetSystemSettings();
-                      showToast("🔄 تمت إعادة ضبط جميع الإعدادات للوضع الافتراضي");
-                    },
-                  },
-                ])
-              }
-            >
-              <Text style={styles.dangerText}>🔄 إعادة ضبط إعدادات النظام للوضع الافتراضي</Text>
-            </TouchableOpacity>
-          </>
-        )}
+        {/* 8. DEVELOPER POWER TOOLS, STORAGE INSPECTOR, HUD & SECURITY */}
+        {tab === "tools" && <DevToolsPanel onToast={showToast} />}
       </ScrollView>
     </SafeAreaView>
   );
@@ -869,13 +690,13 @@ export default function AdminScreen({ onClose }: { onClose: () => void }) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: COLORS.bg },
-  header: { paddingTop: 14, paddingBottom: 12, borderBottomWidth: 0.5, borderBottomColor: COLORS.border },
+  header: { paddingTop: 12, paddingBottom: 10, borderBottomWidth: 0.5, borderBottomColor: COLORS.border },
   headerRow: {
     flexDirection: "row-reverse",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 16,
-    marginBottom: 12,
+    paddingHorizontal: 14,
+    marginBottom: 10,
   },
   badgeIcon: {
     width: 38,
@@ -884,8 +705,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  title: { color: "#fff", fontSize: 18, fontWeight: "800" },
-  subtitle: { color: COLORS.muted, fontSize: 11, marginTop: 2 },
+  title: { color: "#fff", fontSize: 17.5, fontWeight: "900", letterSpacing: 0.4 },
+  subtitle: { color: COLORS.muted, fontSize: 10.5, marginTop: 2 },
   closeBtn: {
     width: 34,
     height: 34,
@@ -897,47 +718,59 @@ const styles = StyleSheet.create({
   tabsGrid: {
     flexDirection: "row-reverse",
     flexWrap: "wrap",
-    paddingHorizontal: 12,
-    gap: 6,
+    paddingHorizontal: 10,
+    gap: 5,
   },
   tabPill: {
-    width: "31.5%",
-    paddingVertical: 8,
-    paddingHorizontal: 6,
-    borderRadius: 10,
+    width: "23.6%",
+    paddingVertical: 7,
+    paddingHorizontal: 4,
+    borderRadius: 9,
     backgroundColor: COLORS.surface,
     borderWidth: 0.5,
     borderColor: COLORS.border,
     alignItems: "center",
   },
   tabPillActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  tabText: { color: COLORS.muted, fontSize: 11.5, fontWeight: "700" },
+  tabText: { color: COLORS.muted, fontSize: 10.5, fontWeight: "700" },
   tabTextActive: { color: "#fff" },
   toastBar: {
-    marginTop: 10,
-    marginHorizontal: 14,
+    marginTop: 8,
+    marginHorizontal: 12,
     backgroundColor: "rgba(34,197,94,0.18)",
     borderColor: COLORS.success,
     borderWidth: 0.6,
     borderRadius: 10,
-    paddingVertical: 7,
+    paddingVertical: 6,
     paddingHorizontal: 12,
     alignItems: "center",
   },
-  toastText: { color: COLORS.success, fontSize: 12, fontWeight: "700", textAlign: "center" },
-  body: { flex: 1, padding: 14 },
-  kpiGrid: { flexDirection: "row-reverse", flexWrap: "wrap", gap: 8, marginBottom: 12 },
+  toastText: { color: COLORS.success, fontSize: 11.5, fontWeight: "700", textAlign: "center" },
+  body: { flex: 1, padding: 12 },
+  kpiGrid: { flexDirection: "row-reverse", flexWrap: "wrap", gap: 8, marginBottom: 10 },
   kpiCard: {
-    width: "48.5%",
+    width: "48.6%",
     backgroundColor: COLORS.surface,
     borderRadius: 14,
-    padding: 14,
+    padding: 12,
     alignItems: "center",
     borderWidth: 0.5,
     borderColor: COLORS.border,
   },
   kpiNum: { color: COLORS.primary, fontSize: 22, fontWeight: "800" },
-  kpiLabel: { color: COLORS.muted, fontSize: 12, marginTop: 3 },
+  kpiLabel: { color: COLORS.muted, fontSize: 11.5, marginTop: 2 },
+  launchCard: {
+    flex: 1,
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: "center",
+    gap: 5,
+    borderWidth: 0.5,
+    borderColor: COLORS.border,
+    marginBottom: 10,
+  },
+  launchTxt: { color: COLORS.text, fontSize: 11, fontWeight: "700" },
   statusStrip: {
     flexDirection: "row-reverse",
     flexWrap: "wrap",
@@ -966,7 +799,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     gap: 10,
   },
-  cardTitle: { color: COLORS.text, fontSize: 14.5, fontWeight: "800", textAlign: "right" },
+  cardTitle: { color: COLORS.text, fontSize: 14, fontWeight: "800", textAlign: "right" },
   input: {
     backgroundColor: COLORS.surface2,
     borderRadius: 10,
@@ -1043,14 +876,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0.5,
     borderBottomColor: COLORS.border,
   },
-  blockedRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 8,
-    borderBottomWidth: 0.5,
-    borderBottomColor: COLORS.border,
-  },
   wordPill: {
     backgroundColor: "rgba(239,68,68,0.14)",
     borderColor: COLORS.danger,
@@ -1059,14 +884,8 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: 999,
   },
-  healthBox: {
-    backgroundColor: COLORS.surface2,
-    borderRadius: 10,
-    padding: 10,
-    borderWidth: 0.5,
-  },
   toggleRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 6 },
   toggleLabel: { color: COLORS.text, fontSize: 13.5, fontWeight: "700" },
-  toggleSub: { color: COLORS.muted, fontSize: 11, marginTop: 2 },
+  toggleSub: { color: COLORS.muted, fontSize: 11, marginTop: 2, textAlign: "right" },
   empty: { color: COLORS.muted, textAlign: "center", paddingVertical: 10, fontSize: 13 },
 });
