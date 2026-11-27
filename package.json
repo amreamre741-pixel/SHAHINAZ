@@ -12,6 +12,8 @@
   },
   "dependencies": {
     "@expo/vector-icons": "^14.0.4",
+    "@neon/config": "^1.14.8",
+    "@neon/env": "^2.1.11",
     "@react-native-async-storage/async-storage": "1.23.1",
     "expo": "~52.0.0",
     "expo-image-picker": "~16.0.6",
