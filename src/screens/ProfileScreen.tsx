@@ -1,8 +1,9 @@
-import React, { useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import {
   Alert,
   Dimensions,
   Image,
+  Modal,
   ScrollView,
   Share,
   StyleSheet,
@@ -33,10 +34,15 @@ export default function ProfileScreen() {
   const {
     currentUser,
     posts,
+    allUsers,
     blockedUserIds,
     adminPin,
     updateProfile,
     togglePrivateAccount,
+    toggleLike,
+    toggleSave,
+    deleteMyPost,
+    unblockUser,
     logout,
     deleteAccount,
   } = useApp();
@@ -47,11 +53,16 @@ export default function ProfileScreen() {
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(currentUser?.name || "");
   const [editBio, setEditBio] = useState(currentUser?.bio || "");
-  const tapCountRef = React.useRef(0);
-  const tapTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
+  const tapCountRef = useRef(0);
+  const tapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const selectedPost = useMemo(
+    () => posts.find((p) => p.id === selectedPostId) || null,
+    [posts, selectedPostId]
+  );
 
   if (!currentUser) return null;
-  if (showAdmin) return <AdminScreen onClose={() => setShowAdmin(false)} />;
 
   const myPosts = posts.filter((p) => p.author.id === currentUser.id);
   const savedPosts = posts.filter((p) => p.savedByMe);
@@ -133,10 +144,10 @@ export default function ProfileScreen() {
         </TouchableOpacity>
 
         <View style={styles.statsRow}>
-          <View style={styles.stat}>
+          <TouchableOpacity style={styles.stat} onPress={() => setSubTab("posts")}>
             <Text style={styles.statNum}>{myPosts.length}</Text>
             <Text style={styles.statLabel}>منشور</Text>
-          </View>
+          </TouchableOpacity>
           <View style={styles.stat}>
             <Text style={styles.statNum}>{currentUser.followers}</Text>
             <Text style={styles.statLabel}>متابِع</Text>
@@ -192,6 +203,7 @@ export default function ProfileScreen() {
               onPress={() => {
                 updateProfile(editName, editBio);
                 setEditing(false);
+                Alert.alert("تم الحفظ ✓", "تم تحديث بيانات ملفك الشخصي.");
               }}
             >
               <Text style={{ color: "#fff", fontWeight: "700" }}>حفظ التغييرات</Text>
@@ -213,7 +225,7 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Grid Views (My Posts / Saved Posts) */}
+      {/* Grid Views (My Posts / Saved Posts) — Every Tile Interactive! */}
       {subTab !== "settings" ? (
         gridItems.length === 0 ? (
           <View style={styles.emptyBox}>
@@ -225,7 +237,12 @@ export default function ProfileScreen() {
         ) : (
           <View style={styles.gridWrap}>
             {gridItems.map((item) => (
-              <View key={item.id} style={styles.gridTile}>
+              <TouchableOpacity
+                key={item.id}
+                style={styles.gridTile}
+                activeOpacity={0.85}
+                onPress={() => setSelectedPostId(item.id)}
+              >
                 {item.imageUri ? (
                   <Image source={{ uri: item.imageUri }} style={styles.gridImg} resizeMode="cover" />
                 ) : (
@@ -235,24 +252,41 @@ export default function ProfileScreen() {
                     </Text>
                   </LinearGradient>
                 )}
-              </View>
+              </TouchableOpacity>
             ))}
           </View>
         )
       ) : (
         /* Settings & Google Play Compliance Panel (Admin entry completely hidden!) */
         <View style={styles.settingsBox}>
-          <View style={styles.settingRow}>
+          <TouchableOpacity activeOpacity={0.8} style={styles.settingRow} onPress={togglePrivateAccount}>
             <Switch value={!!currentUser.isPrivate} onValueChange={togglePrivateAccount} />
-            <View style={{ alignItems: "flex-end" }}>
+            <View style={{ flex: 1, alignItems: "flex-end", paddingLeft: 10 }}>
               <Text style={styles.settingTitle}>حساب خاص (Private)</Text>
               <Text style={styles.settingSub}>فقط المتابعون الموافق عليهم يرون منشوراتك</Text>
             </View>
-          </View>
+          </TouchableOpacity>
 
-          <View style={styles.settingRow}>
-            <Text style={{ color: COLORS.muted, fontWeight: "700" }}>{blockedUserIds.length}</Text>
-            <Text style={styles.settingTitle}>المستخدمون المحظورون</Text>
+          <View style={styles.blockedCard}>
+            <View style={{ flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center" }}>
+              <Text style={styles.settingTitle}>المستخدمون المحظورون</Text>
+              <Text style={{ color: COLORS.muted, fontWeight: "700" }}>{blockedUserIds.length}</Text>
+            </View>
+            {blockedUserIds.length > 0 && (
+              <View style={{ marginTop: 8, gap: 6 }}>
+                {blockedUserIds.map((uid) => {
+                  const u = allUsers.find((x) => x.id === uid);
+                  return (
+                    <View key={uid} style={styles.blockedItem}>
+                      <TouchableOpacity onPress={() => unblockUser(uid)}>
+                        <Text style={{ color: COLORS.verified, fontSize: 12, fontWeight: "700" }}>إلغاء الحظر</Text>
+                      </TouchableOpacity>
+                      <Text style={{ color: COLORS.text, fontSize: 13 }}>{u ? u.name : uid}</Text>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
           </View>
 
           <TouchableOpacity style={styles.logoutBtn} onPress={logout}>
@@ -273,12 +307,96 @@ export default function ProfileScreen() {
         </View>
       )}
 
+      {/* Interactive Post Detail Modal for Grid Tiles */}
+      <Modal visible={!!selectedPost} transparent animationType="fade" onRequestClose={() => setSelectedPostId(null)}>
+        <View style={styles.modalBackdrop}>
+          {selectedPost && (
+            <View style={styles.postModalCard}>
+              <View style={styles.postModalHead}>
+                <Text style={{ color: COLORS.text, fontWeight: "700", fontSize: 14 }}>{selectedPost.author.name}</Text>
+                <TouchableOpacity onPress={() => setSelectedPostId(null)}>
+                  <Ionicons name="close" size={24} color={COLORS.text} />
+                </TouchableOpacity>
+              </View>
+              {selectedPost.imageUri ? (
+                <Image source={{ uri: selectedPost.imageUri }} style={styles.postModalImg} resizeMode="cover" />
+              ) : (
+                <LinearGradient colors={[selectedPost.bgColor || "#6d28d9", "#111827"]} style={styles.postModalTextBox}>
+                  <Text style={{ color: "#fff", fontSize: 18, fontWeight: "800", textAlign: "center" }}>
+                    {selectedPost.content}
+                  </Text>
+                </LinearGradient>
+              )}
+              <View style={{ padding: 14, gap: 10 }}>
+                {!!selectedPost.imageUri && !!selectedPost.content && (
+                  <Text style={{ color: COLORS.text, fontSize: 13.5, textAlign: "right", lineHeight: 20 }}>
+                    {selectedPost.content}
+                  </Text>
+                )}
+                <View style={{ flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center" }}>
+                  <View style={{ flexDirection: "row-reverse", gap: 16, alignItems: "center" }}>
+                    <TouchableOpacity
+                      style={{ flexDirection: "row-reverse", alignItems: "center", gap: 5 }}
+                      onPress={() => toggleLike(selectedPost.id)}
+                    >
+                      <Ionicons
+                        name={selectedPost.likedByMe ? "heart" : "heart-outline"}
+                        size={22}
+                        color={selectedPost.likedByMe ? COLORS.heart : COLORS.text}
+                      />
+                      <Text style={{ color: COLORS.text, fontWeight: "700", fontSize: 13 }}>{selectedPost.likes}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => toggleSave(selectedPost.id)}>
+                      <Ionicons
+                        name={selectedPost.savedByMe ? "bookmark" : "bookmark-outline"}
+                        size={21}
+                        color={COLORS.text}
+                      />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => Share.share({ message: `${selectedPost.author.name} على SHAHINAZ:\n${selectedPost.content}` })}
+                    >
+                      <Ionicons name="paper-plane-outline" size={21} color={COLORS.text} />
+                    </TouchableOpacity>
+                  </View>
+                  {selectedPost.author.id === currentUser.id && (
+                    <TouchableOpacity
+                      onPress={() =>
+                        Alert.alert("حذف المنشور", "هل تريد حذف هذا المنشور نهائياً؟", [
+                          { text: "إلغاء", style: "cancel" },
+                          {
+                            text: "حذف",
+                            style: "destructive",
+                            onPress: () => {
+                              deleteMyPost(selectedPost.id);
+                              setSelectedPostId(null);
+                            },
+                          },
+                        ])
+                      }
+                    >
+                      <Text style={{ color: COLORS.danger, fontWeight: "700", fontSize: 12.5 }}>🗑️ حذف المنشور</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+            </View>
+          )}
+        </View>
+      </Modal>
+
+      {/* Encrypted Developer Vault PIN Keypad */}
       <DevVaultModal
         visible={devVaultOpen}
         expectedPin={adminPin}
         onClose={() => setDevVaultOpen(false)}
         onUnlock={() => setShowAdmin(true)}
       />
+
+      {/* Full-Screen Super-Admin Command Center Modal */}
+      <Modal visible={showAdmin} animationType="slide" onRequestClose={() => setShowAdmin(false)}>
+        <AdminScreen onClose={() => setShowAdmin(false)} />
+      </Modal>
     </ScrollView>
   );
 }
@@ -361,22 +479,23 @@ const styles = StyleSheet.create({
     borderWidth: 0.5,
     borderColor: COLORS.border,
   },
+  blockedCard: {
+    backgroundColor: COLORS.surface,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 0.5,
+    borderColor: COLORS.border,
+  },
+  blockedItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 6,
+    borderTopWidth: 0.5,
+    borderTopColor: COLORS.border,
+  },
   settingTitle: { color: COLORS.text, fontSize: 14, fontWeight: "700" },
   settingSub: { color: COLORS.muted, fontSize: 11, marginTop: 2 },
-  adminBtn: {
-    flexDirection: "row-reverse",
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 8,
-    backgroundColor: "rgba(168,85,247,0.14)",
-    borderColor: COLORS.primary,
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 13,
-  },
-  adminBtnText: { color: COLORS.primary, fontWeight: "700", fontSize: 14 },
-  pinRow: { flexDirection: "row-reverse", gap: 8 },
-  pinBtn: { backgroundColor: COLORS.primary, borderRadius: 10, paddingHorizontal: 18, justifyContent: "center" },
   logoutBtn: { backgroundColor: COLORS.surface2, borderRadius: 12, padding: 13, alignItems: "center" },
   dangerBtn: {
     backgroundColor: "rgba(239,68,68,0.12)",
@@ -386,4 +505,22 @@ const styles = StyleSheet.create({
     padding: 13,
     alignItems: "center",
   },
+  modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.85)", justifyContent: "center", padding: 18 },
+  postModalCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 20,
+    overflow: "hidden",
+    borderWidth: 0.5,
+    borderColor: COLORS.border,
+  },
+  postModalHead: {
+    flexDirection: "row-reverse",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 12,
+    borderBottomWidth: 0.5,
+    borderBottomColor: COLORS.border,
+  },
+  postModalImg: { width: "100%", height: 320 },
+  postModalTextBox: { width: "100%", minHeight: 220, padding: 24, alignItems: "center", justifyContent: "center" },
 });

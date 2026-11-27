@@ -111,7 +111,7 @@ export interface ChatThread {
   lastMessage: string;
   time: string;
   unread: number;
-  messages: { id: string; fromMe: boolean; text: string; time: string }[];
+  messages: { id: string; fromMe: boolean; text: string; imageUri?: string; time: string }[];
 }
 
 export interface NoteItem {

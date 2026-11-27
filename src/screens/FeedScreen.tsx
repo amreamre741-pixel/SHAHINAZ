@@ -5,6 +5,7 @@ import {
   Dimensions,
   FlatList,
   Image,
+  Linking,
   Modal,
   RefreshControl,
   ScrollView,
@@ -88,7 +89,9 @@ export default function FeedScreen() {
     adminPin,
     bannedWords,
     rolePermissions,
+    followingUserIds,
     blockedUserIds,
+    toggleFollowUser,
     toggleLike,
     toggleSave,
     addComment,
@@ -116,6 +119,10 @@ export default function FeedScreen() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [devVaultOpen, setDevVaultOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
+  const [selectedAuthorId, setSelectedAuthorId] = useState<string | null>(null);
+  const [storyReactionMsg, setStoryReactionMsg] = useState("");
+
+  const selectedAuthor = allUsers.find((u) => u.id === selectedAuthorId) || null;
 
   const versionTapCountRef = useRef(0);
   const versionTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -327,7 +334,11 @@ export default function FeedScreen() {
           <View style={styles.postContainer}>
             {/* Post Header */}
             <View style={styles.postHeader}>
-              <View style={styles.authorRow}>
+              <TouchableOpacity
+                style={styles.authorRow}
+                activeOpacity={0.8}
+                onPress={() => setSelectedAuthorId(item.author.id)}
+              >
                 <LinearGradient
                   colors={["#feda75", "#d62976", "#962fbf"]}
                   style={styles.miniRing}
@@ -356,7 +367,7 @@ export default function FeedScreen() {
                     {item.isSponsored ? " · مموّل" : ""}
                   </Text>
                 </View>
-              </View>
+              </TouchableOpacity>
               <TouchableOpacity onPress={() => openPostMenu(item)} style={styles.moreBtn}>
                 <Ionicons name="ellipsis-horizontal" size={20} color={COLORS.muted} />
               </TouchableOpacity>
@@ -531,12 +542,36 @@ export default function FeedScreen() {
               </View>
             )}
 
-            {/* Story Caption Overlay */}
-            {!!activeStory?.text && (
-              <View style={styles.fullStoryCaptionBox}>
-                <Text style={styles.fullStoryCaption}>{activeStory.text}</Text>
+            {/* Story Caption Overlay + Quick Emoji Reactions */}
+            <View style={styles.fullStoryCaptionBox}>
+              {!!activeStory?.text && <Text style={styles.fullStoryCaption}>{activeStory.text}</Text>}
+              {!!storyReactionMsg && (
+                <Text style={{ color: "#fde68a", textAlign: "center", fontWeight: "700", fontSize: 13, marginTop: 8 }}>
+                  {storyReactionMsg}
+                </Text>
+              )}
+              <View style={{ flexDirection: "row", justifyContent: "center", gap: 14, marginTop: 14 }}>
+                {["❤️", "🔥", "👏", "😍"].map((em) => (
+                  <TouchableOpacity
+                    key={em}
+                    style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: 22,
+                      backgroundColor: "rgba(255,255,255,0.16)",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                    onPress={() => {
+                      setStoryReactionMsg(`تم إرسال ${em} إلى ${activeStory?.userName}`);
+                      setTimeout(() => setStoryReactionMsg(""), 1400);
+                    }}
+                  >
+                    <Text style={{ fontSize: 22 }}>{em}</Text>
+                  </TouchableOpacity>
+                ))}
               </View>
-            )}
+            </View>
           </View>
         </TouchableWithoutFeedback>
       </Modal>
@@ -561,6 +596,10 @@ export default function FeedScreen() {
               <TouchableOpacity
                 style={styles.primaryBtn}
                 onPress={() => {
+                  if (!storyText.trim() && !storyImg) {
+                    Alert.alert("تنبيه", "اكتب تعليقاً أو اختر صورة لقصتك أولاً.");
+                    return;
+                  }
                   addStory(storyText, storyImg);
                   setStoryText("");
                   setStoryImg(undefined);
@@ -597,6 +636,80 @@ export default function FeedScreen() {
               <Text style={{ color: "#fff", fontWeight: "700" }}>إغلاق</Text>
             </TouchableOpacity>
           </View>
+        </View>
+      </Modal>
+
+      {/* Author Quick-Profile Modal (Opened by tapping any creator avatar/name) */}
+      <Modal visible={!!selectedAuthor} transparent animationType="fade" onRequestClose={() => setSelectedAuthorId(null)}>
+        <View style={styles.modalBackdrop}>
+          {selectedAuthor && (
+            <View style={styles.modalBox}>
+              <View style={{ flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <Text style={{ color: COLORS.muted, fontSize: 12 }}>@{selectedAuthor.username}</Text>
+                <TouchableOpacity onPress={() => setSelectedAuthorId(null)}>
+                  <Ionicons name="close" size={24} color={COLORS.text} />
+                </TouchableOpacity>
+              </View>
+              <View style={{ alignItems: "center", gap: 8 }}>
+                {selectedAuthor.avatarUri ? (
+                  <Image source={{ uri: selectedAuthor.avatarUri }} style={{ width: 76, height: 76, borderRadius: 38 }} />
+                ) : (
+                  <View style={{ width: 76, height: 76, borderRadius: 38, backgroundColor: COLORS.surface2, alignItems: "center", justifyContent: "center" }}>
+                    <Text style={{ fontSize: 32 }}>{selectedAuthor.avatarEmoji}</Text>
+                  </View>
+                )}
+                <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 5 }}>
+                  <Text style={{ color: COLORS.text, fontSize: 17, fontWeight: "800" }}>{selectedAuthor.name}</Text>
+                  {selectedAuthor.verified && <Ionicons name="checkmark-circle" size={16} color={COLORS.verified} />}
+                </View>
+                {!!selectedAuthor.bio && (
+                  <Text style={{ color: COLORS.muted, fontSize: 13, textAlign: "center" }}>{selectedAuthor.bio}</Text>
+                )}
+                <View style={{ flexDirection: "row-reverse", gap: 24, marginVertical: 8 }}>
+                  <View style={{ alignItems: "center" }}>
+                    <Text style={{ color: COLORS.text, fontWeight: "800", fontSize: 16 }}>
+                      {selectedAuthor.followers.toLocaleString("fr-DZ")}
+                    </Text>
+                    <Text style={{ color: COLORS.muted, fontSize: 11.5 }}>متابِع</Text>
+                  </View>
+                  <View style={{ alignItems: "center" }}>
+                    <Text style={{ color: COLORS.text, fontWeight: "800", fontSize: 16 }}>{selectedAuthor.following}</Text>
+                    <Text style={{ color: COLORS.muted, fontSize: 11.5 }}>يتابِع</Text>
+                  </View>
+                </View>
+
+                {selectedAuthor.id !== currentUser?.id && (
+                  <View style={{ flexDirection: "row-reverse", gap: 8, width: "100%", marginTop: 6 }}>
+                    <TouchableOpacity
+                      style={[
+                        styles.primaryBtn,
+                        {
+                          backgroundColor: followingUserIds.includes(selectedAuthor.id)
+                            ? COLORS.surface2
+                            : COLORS.verified,
+                        },
+                      ]}
+                      onPress={() => toggleFollowUser(selectedAuthor.id)}
+                    >
+                      <Text style={{ color: "#fff", fontWeight: "800" }}>
+                        {followingUserIds.includes(selectedAuthor.id) ? "متابَع ✓" : "متابعة +"}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.outlineBtn, { borderWidth: 0.8, borderColor: COLORS.danger }]}
+                      onPress={() => {
+                        blockUser(selectedAuthor.id);
+                        setSelectedAuthorId(null);
+                        Alert.alert("تم الحظر", `تم حظر ${selectedAuthor.name} بنجاح.`);
+                      }}
+                    >
+                      <Text style={{ color: COLORS.danger, fontWeight: "700" }}>حظر 🚫</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            </View>
+          )}
         </View>
       </Modal>
 
@@ -638,14 +751,31 @@ export default function FeedScreen() {
                 </View>
               )}
 
-              {/* Private Account Toggle */}
-              <View style={styles.settingRow}>
+              {/* Private Account Toggle (Full-row tappable) */}
+              <TouchableOpacity activeOpacity={0.8} style={styles.settingRow} onPress={togglePrivateAccount}>
                 <Switch value={!!currentUser?.isPrivate} onValueChange={togglePrivateAccount} />
                 <View style={{ flex: 1, alignItems: "flex-end", paddingLeft: 10 }}>
                   <Text style={styles.settingTitle}>حساب خاص (Private)</Text>
                   <Text style={styles.settingSub}>فقط المتابعون الموافق عليهم يشاهدون منشوراتك</Text>
                 </View>
-              </View>
+              </TouchableOpacity>
+
+              {/* Privacy Policy & Safety Standards */}
+              <TouchableOpacity
+                activeOpacity={0.8}
+                style={styles.settingRow}
+                onPress={() =>
+                  Linking.openURL("https://amreamre741-pixel.github.io/SHAHINAZ/privacy.html").catch(() =>
+                    Alert.alert("سياسة الخصوصية", "نحمي بياناتك بالكامل وفق معايير Google Play ومعايير سلامة المجتمع.")
+                  )
+                }
+              >
+                <Ionicons name="chevron-back" size={18} color={COLORS.muted} />
+                <View style={{ flex: 1, alignItems: "flex-end" }}>
+                  <Text style={styles.settingTitle}>سياسة الخصوصية وشروط الاستخدام</Text>
+                  <Text style={styles.settingSub}>معايير الأمان وحماية البيانات (Google Play)</Text>
+                </View>
+              </TouchableOpacity>
 
               {/* App Theme & Connection Status */}
               <View style={styles.settingRow}>

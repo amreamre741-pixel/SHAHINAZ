@@ -76,6 +76,7 @@ interface AppContextValue {
   codOrders: CodOrder[];
   chats: ChatThread[];
   accentColor: string;
+  followingUserIds: string[];
   blockedUserIds: string[];
   reportedPostIds: string[];
   reports: ReportItem[];
@@ -97,11 +98,13 @@ interface AppContextValue {
   updateProfile: (name: string, bio: string, avatarUri?: string) => void;
   togglePrivateAccount: () => void;
   setAccentColor: (color: string) => void;
+  toggleFollowUser: (userId: string) => void;
   toggleLike: (postId: string) => void;
   setReaction: (postId: string, emoji: ReactionEmoji) => void;
   toggleSave: (postId: string) => void;
   addComment: (postId: string, text: string) => void;
   createPost: (content: string, imageUri?: string, location?: string, bgColor?: string, pollOptions?: string[]) => void;
+  deleteMyPost: (postId: string) => void;
   votePoll: (postId: string, optionId: string) => void;
   addStory: (text: string, imageUri?: string) => void;
   markStorySeen: (storyId: string) => void;
@@ -114,7 +117,9 @@ interface AppContextValue {
   reportPost: (postId: string, reason: string) => void;
   blockUser: (userId: string) => void;
   unblockUser: (userId: string) => void;
-  sendMessage: (chatId: string, text: string) => void;
+  markChatRead: (chatId: string) => void;
+  startChatWithUser: (user: User) => string;
+  sendMessage: (chatId: string, text: string, imageUri?: string) => void;
   adminDeletePost: (postId: string) => void;
   adminToggleSponsor: (postId: string) => void;
   adminTogglePinPost: (postId: string) => void;
@@ -394,6 +399,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [codOrders, setCodOrders] = useState<CodOrder[]>([]);
   const [chats, setChats] = useState<ChatThread[]>(INITIAL_CHATS);
   const [accentColor, setAccentColor] = useState<string>("#8b5cf6");
+  const [followingUserIds, setFollowingUserIds] = useState<string[]>(["u_1", "u_2"]);
   const [blockedUserIds, setBlockedUserIds] = useState<string[]>([]);
   const [reportedPostIds, setReportedPostIds] = useState<string[]>([]);
   const [reports, setReports] = useState<ReportItem[]>([]);
@@ -569,7 +575,30 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }
 
   function togglePrivateAccount() {
-    setCurrentUser((prev) => (prev ? { ...prev, isPrivate: !prev.isPrivate } : prev));
+    setCurrentUser((prev) => {
+      if (!prev) return prev;
+      const updated = { ...prev, isPrivate: !prev.isPrivate };
+      AsyncStorage.setItem("shahinaz_user", JSON.stringify(updated)).catch(() => {});
+      return updated;
+    });
+  }
+
+  function toggleFollowUser(userId: string) {
+    if (!currentUser || userId === currentUser.id) return;
+    const already = followingUserIds.includes(userId);
+    setFollowingUserIds((prev) => (already ? prev.filter((id) => id !== userId) : [...prev, userId]));
+    setUsers((prev) =>
+      prev.map((u) =>
+        u.id === userId ? { ...u, followers: Math.max(0, u.followers + (already ? -1 : 1)) } : u
+      )
+    );
+    setCurrentUser((prev) =>
+      prev ? { ...prev, following: Math.max(0, prev.following + (already ? -1 : 1)) } : prev
+    );
+  }
+
+  function deleteMyPost(postId: string) {
+    setPosts((prev) => prev.filter((p) => p.id !== postId));
   }
 
   function setReaction(postId: string, emoji: ReactionEmoji) {
@@ -597,6 +626,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   function adminToggleSponsor(postId: string) {
     setPosts((prev) => prev.map((p) => (p.id === postId ? { ...p, isSponsored: !p.isSponsored } : p)));
+    pushAdminLog("تبديل حالة ترويج منشور (مموّل) ⭐");
   }
 
   function logout() {
@@ -618,16 +648,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }
 
   function updateProfile(name: string, bio: string, avatarUri?: string) {
-    setCurrentUser((prev) =>
-      prev
-        ? {
-            ...prev,
-            name: name.trim() || prev.name,
-            bio: bio.trim(),
-            avatarUri: avatarUri ?? prev.avatarUri,
-          }
-        : prev
-    );
+    setCurrentUser((prev) => {
+      if (!prev) return prev;
+      const updated = {
+        ...prev,
+        name: name.trim() || prev.name,
+        bio: bio.trim(),
+        avatarUri: avatarUri ?? prev.avatarUri,
+      };
+      AsyncStorage.setItem("shahinaz_user", JSON.stringify(updated)).catch(() => {});
+      return updated;
+    });
   }
 
   function toggleLike(postId: string) {
@@ -771,17 +802,44 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setBlockedUserIds((prev) => prev.filter((id) => id !== userId));
   }
 
-  function sendMessage(chatId: string, text: string) {
-    if (!text.trim()) return;
+  function markChatRead(chatId: string) {
+    setChats((prev) => prev.map((ch) => (ch.id === chatId ? { ...ch, unread: 0 } : ch)));
+  }
+
+  function startChatWithUser(user: User): string {
+    const existing = chats.find((ch) => ch.user.id === user.id);
+    if (existing) {
+      markChatRead(existing.id);
+      return existing.id;
+    }
+    const newId = `ch_${user.id}_${Date.now()}`;
+    const newThread: ChatThread = {
+      id: newId,
+      user,
+      lastMessage: "ابدأ المحادثة الآن...",
+      time: "الآن",
+      unread: 0,
+      messages: [],
+    };
+    setChats((prev) => [newThread, ...prev]);
+    return newId;
+  }
+
+  function sendMessage(chatId: string, text: string, imageUri?: string) {
+    const clean = text.trim();
+    if (!clean && !imageUri) return;
     setChats((prev) =>
       prev.map((ch) =>
         ch.id === chatId
           ? {
               ...ch,
-              lastMessage: text.trim(),
+              lastMessage: imageUri ? "📷 صورة" : clean,
               time: "الآن",
               unread: 0,
-              messages: [...ch.messages, { id: `m_${Date.now()}`, fromMe: true, text: text.trim(), time: "الآن" }],
+              messages: [
+                ...ch.messages,
+                { id: `m_${Date.now()}`, fromMe: true, text: clean, imageUri, time: "الآن" },
+              ],
             }
           : ch
       )
@@ -1023,6 +1081,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         codOrders,
         chats: chats.filter((c) => !blockedUserIds.includes(c.user.id)),
         accentColor,
+        followingUserIds,
         blockedUserIds,
         reportedPostIds,
         reports,
@@ -1044,11 +1103,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         updateProfile,
         togglePrivateAccount,
         setAccentColor,
+        toggleFollowUser,
         toggleLike,
         setReaction,
         toggleSave,
         addComment,
         createPost,
+        deleteMyPost,
         votePoll,
         addStory,
         markStorySeen,
@@ -1061,6 +1122,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         reportPost,
         blockUser,
         unblockUser,
+        markChatRead,
+        startChatWithUser,
         sendMessage,
         adminDeletePost,
         adminToggleSponsor,

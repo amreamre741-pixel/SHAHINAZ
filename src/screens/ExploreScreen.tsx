@@ -7,6 +7,7 @@ import {
   Linking,
   Modal,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -17,7 +18,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { COLORS } from "../theme";
 import { useApp } from "../store/AppContext";
-import type { AudioRoom, Post } from "../types";
+import type { AudioRoom } from "../types";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const GRID_SIZE = (SCREEN_WIDTH - 4) / 3;
@@ -63,6 +64,15 @@ const SHOP_REELS = [
   },
 ];
 
+const INITIAL_REEL_COMMENTS: Record<string, { id: string; user: string; text: string }[]> = {
+  r_1: [
+    { id: "rc1", user: "أمين فوتو", text: "السعر ممتاز جداً! هل التوصيل متوفر لوهران؟ 🔥" },
+    { id: "rc2", user: "سارة منصوري", text: "طلبت واحدة ووصلت في 24 ساعة 👏" },
+  ],
+  r_2: [{ id: "rc3", user: "ياسين بن علي", text: "ما شاء الله على جمال وهران 🌊🇩🇿" }],
+  r_3: [{ id: "rc4", user: "كريم تكنولوجي", text: "جودة الصوت رائعة مقارنة بالسعر 🎧" }],
+};
+
 const LEADERBOARD = [
   { rank: 1, name: "سارة منصوري", wilaya: "وهران", points: 2840, avatarUri: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&q=80" },
   { rank: 2, name: "ياسين بن علي", wilaya: "الجزائر", points: 2190, avatarUri: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&q=80" },
@@ -82,12 +92,21 @@ export default function ExploreScreen() {
     createAudioRoom,
     placeCodOrder,
     toggleLike,
+    toggleSave,
   } = useApp();
 
   const [mode, setMode] = useState<"explore" | "reels" | "rooms" | "market">("explore");
   const [q, setQ] = useState("");
   const [likedReels, setLikedReels] = useState<string[]>([]);
-  const [previewPost, setPreviewPost] = useState<Post | null>(null);
+  const [previewPostId, setPreviewPostId] = useState<string | null>(null);
+  const [reelComments, setReelComments] = useState(INITIAL_REEL_COMMENTS);
+  const [commentReelId, setCommentReelId] = useState<string | null>(null);
+  const [reelCommentDraft, setReelCommentDraft] = useState("");
+
+  const previewPost = useMemo(
+    () => posts.find((p) => p.id === previewPostId) || null,
+    [posts, previewPostId]
+  );
 
   // Weekly Challenge modal
   const [challengeOpen, setChallengeOpen] = useState(false);
@@ -247,7 +266,7 @@ export default function ExploreScreen() {
             columnWrapperStyle={{ gap: 2 }}
             contentContainerStyle={{ gap: 2 }}
             renderItem={({ item }) => (
-              <TouchableOpacity style={styles.gridTile} onPress={() => setPreviewPost(item)}>
+              <TouchableOpacity style={styles.gridTile} onPress={() => setPreviewPostId(item.id)}>
                 {item.imageUri ? (
                   <Image source={{ uri: item.imageUri }} style={styles.gridImg} resizeMode="cover" />
                 ) : (
@@ -272,6 +291,7 @@ export default function ExploreScreen() {
           contentContainerStyle={{ paddingHorizontal: 10, paddingBottom: 20, gap: 12 }}
           renderItem={({ item }) => {
             const liked = likedReels.includes(item.id);
+            const extraComments = (reelComments[item.id]?.length ?? 0) - (INITIAL_REEL_COMMENTS[item.id]?.length ?? 0);
             return (
               <View style={styles.reelFull}>
                 <Image source={{ uri: item.imageUri }} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
@@ -289,13 +309,28 @@ export default function ExploreScreen() {
                     <Ionicons name={liked ? "heart" : "heart-outline"} size={30} color={liked ? COLORS.heart : "#fff"} />
                     <Text style={styles.reelStat}>{(item.likes + (liked ? 1 : 0)).toLocaleString("fr-DZ")}</Text>
                   </TouchableOpacity>
-                  <View style={styles.reelActionBtn}>
+
+                  <TouchableOpacity
+                    style={styles.reelActionBtn}
+                    onPress={() => {
+                      setCommentReelId(item.id);
+                      setReelCommentDraft("");
+                    }}
+                  >
                     <Ionicons name="chatbubble-ellipses-outline" size={28} color="#fff" />
-                    <Text style={styles.reelStat}>{item.comments}</Text>
-                  </View>
-                  <View style={styles.reelActionBtn}>
+                    <Text style={styles.reelStat}>{item.comments + Math.max(0, extraComments)}</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.reelActionBtn}
+                    onPress={() =>
+                      Share.share({
+                        message: `شاهد هذا الريل على SHAHINAZ من ${item.author}:\n${item.title}`,
+                      })
+                    }
+                  >
                     <Ionicons name="paper-plane-outline" size={26} color="#fff" />
-                  </View>
+                  </TouchableOpacity>
                 </View>
 
                 <View style={styles.reelFooter}>
@@ -552,6 +587,37 @@ export default function ExploreScreen() {
                     </Text>
                   </View>
                 ))}
+
+                {/* Current User Live on Stage */}
+                {currentUser && !activeRoom.speakers.some((s) => s.name === currentUser.name) && (
+                  <View style={{ alignItems: "center", width: 80 }}>
+                    {currentUser.avatarUri ? (
+                      <Image
+                        source={{ uri: currentUser.avatarUri }}
+                        style={[
+                          styles.stageAvatar,
+                          micOn && { borderColor: COLORS.success, borderWidth: 3 },
+                          handRaised && !micOn && { borderColor: COLORS.warn, borderWidth: 2 },
+                        ]}
+                      />
+                    ) : (
+                      <View
+                        style={[
+                          styles.stageAvatarFallback,
+                          micOn && { borderColor: COLORS.success, borderWidth: 3 },
+                        ]}
+                      >
+                        <Ionicons name="person" size={28} color="#fff" />
+                      </View>
+                    )}
+                    <Text style={{ color: COLORS.text, fontSize: 12, fontWeight: "700", marginTop: 6 }} numberOfLines={1}>
+                      أنت
+                    </Text>
+                    <Text style={{ color: micOn ? COLORS.success : handRaised ? COLORS.warn : COLORS.muted, fontSize: 10 }}>
+                      {micOn ? "🎙️ تتحدث" : handRaised ? "✋ تطلب الكلمة" : "مستمع"}
+                    </Text>
+                  </View>
+                )}
               </View>
 
               <View style={{ flexDirection: "row-reverse", gap: 10, marginTop: 18 }}>
@@ -585,10 +651,27 @@ export default function ExploreScreen() {
               <TouchableOpacity
                 style={[styles.sellBtn, { flex: 1, marginBottom: 0 }]}
                 onPress={() => {
-                  createAudioRoom(roomTitle, roomTopic);
+                  if (!roomTitle.trim()) {
+                    Alert.alert("تنبيه", "يرجى كتابة عنوان للغرفة الصوتية.");
+                    return;
+                  }
+                  const titleClean = roomTitle.trim();
+                  const topicClean = roomTopic.trim() || "دردشة مباشرة";
+                  createAudioRoom(titleClean, topicClean);
                   setRoomTitle("");
                   setRoomTopic("");
                   setNewRoomOpen(false);
+                  setMicOn(true);
+                  setHandRaised(false);
+                  setActiveRoom({
+                    id: `ar_now_${Date.now()}`,
+                    title: titleClean,
+                    hostName: currentUser?.name || "أنت",
+                    hostAvatarUri: currentUser?.avatarUri,
+                    topic: topicClean,
+                    listeners: 1,
+                    speakers: [{ name: currentUser?.name || "أنت", avatarUri: currentUser?.avatarUri, speaking: true }],
+                  });
                 }}
               >
                 <Text style={{ color: "#fff", fontWeight: "700" }}>بدء الغرفة الآن</Text>
@@ -630,26 +713,103 @@ export default function ExploreScreen() {
         </View>
       </Modal>
 
-      {/* Grid Photo Lightbox Modal */}
-      <Modal visible={!!previewPost} transparent animationType="fade" onRequestClose={() => setPreviewPost(null)}>
-        <TouchableOpacity style={styles.lightbox} activeOpacity={1} onPress={() => setPreviewPost(null)}>
-          {previewPost && (
-            <View style={styles.lightboxCard}>
-              {previewPost.imageUri && <Image source={{ uri: previewPost.imageUri }} style={styles.lightboxImg} />}
-              <View style={{ padding: 14 }}>
-                <Text style={styles.cardTitle}>{previewPost.author.name}</Text>
-                <Text style={{ color: COLORS.text, fontSize: 13, textAlign: "right", marginTop: 4 }}>{previewPost.content}</Text>
+      {/* Interactive Reel Comments Sheet Modal */}
+      <Modal visible={!!commentReelId} transparent animationType="slide" onRequestClose={() => setCommentReelId(null)}>
+        <View style={styles.lightbox}>
+          {commentReelId && (
+            <View style={styles.modalSheet}>
+              <View style={{ flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                <Text style={styles.sheetTitle}>💬 تعليقات الريل</Text>
+                <TouchableOpacity onPress={() => setCommentReelId(null)}>
+                  <Ionicons name="close" size={24} color={COLORS.text} />
+                </TouchableOpacity>
+              </View>
+              <ScrollView style={{ maxHeight: 240, marginBottom: 10 }}>
+                {(reelComments[commentReelId] || []).map((c) => (
+                  <View key={c.id} style={{ paddingVertical: 8, borderBottomWidth: 0.5, borderBottomColor: COLORS.border }}>
+                    <Text style={{ color: COLORS.text, fontWeight: "700", fontSize: 12.5, textAlign: "right" }}>{c.user}</Text>
+                    <Text style={{ color: COLORS.muted, fontSize: 13, textAlign: "right", marginTop: 2 }}>{c.text}</Text>
+                  </View>
+                ))}
+              </ScrollView>
+              <View style={{ flexDirection: "row-reverse", gap: 8 }}>
+                <TextInput
+                  style={[styles.input, { flex: 1, marginBottom: 0 }]}
+                  placeholder="أضف تعليقاً..."
+                  placeholderTextColor={COLORS.muted}
+                  value={reelCommentDraft}
+                  onChangeText={setReelCommentDraft}
+                />
                 <TouchableOpacity
-                  style={{ flexDirection: "row-reverse", alignItems: "center", gap: 6, marginTop: 10 }}
-                  onPress={() => toggleLike(previewPost.id)}
+                  style={[styles.sellBtn, { marginBottom: 0, paddingHorizontal: 16 }]}
+                  onPress={() => {
+                    const clean = reelCommentDraft.trim();
+                    if (!clean) return;
+                    setReelComments((prev) => ({
+                      ...prev,
+                      [commentReelId]: [
+                        ...(prev[commentReelId] || []),
+                        { id: `rc_${Date.now()}`, user: currentUser?.name || "أنت", text: clean },
+                      ],
+                    }));
+                    setReelCommentDraft("");
+                  }}
                 >
-                  <Ionicons name="heart" size={20} color={COLORS.heart} />
-                  <Text style={{ color: COLORS.text, fontWeight: "700" }}>{previewPost.likes} إعجاب</Text>
+                  <Text style={{ color: "#fff", fontWeight: "700" }}>نشر</Text>
                 </TouchableOpacity>
               </View>
             </View>
           )}
-        </TouchableOpacity>
+        </View>
+      </Modal>
+
+      {/* Grid Photo Lightbox Modal (Live State!) */}
+      <Modal visible={!!previewPost} transparent animationType="fade" onRequestClose={() => setPreviewPostId(null)}>
+        <View style={styles.lightbox}>
+          {previewPost && (
+            <View style={styles.lightboxCard}>
+              <View style={{ flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", padding: 12 }}>
+                <Text style={styles.cardTitle}>{previewPost.author.name}</Text>
+                <TouchableOpacity onPress={() => setPreviewPostId(null)}>
+                  <Ionicons name="close" size={24} color={COLORS.text} />
+                </TouchableOpacity>
+              </View>
+              {previewPost.imageUri && <Image source={{ uri: previewPost.imageUri }} style={styles.lightboxImg} />}
+              <View style={{ padding: 14 }}>
+                <Text style={{ color: COLORS.text, fontSize: 13, textAlign: "right" }}>{previewPost.content}</Text>
+                <View style={{ flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", marginTop: 12 }}>
+                  <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 16 }}>
+                    <TouchableOpacity
+                      style={{ flexDirection: "row-reverse", alignItems: "center", gap: 5 }}
+                      onPress={() => toggleLike(previewPost.id)}
+                    >
+                      <Ionicons
+                        name={previewPost.likedByMe ? "heart" : "heart-outline"}
+                        size={22}
+                        color={previewPost.likedByMe ? COLORS.heart : COLORS.text}
+                      />
+                      <Text style={{ color: COLORS.text, fontWeight: "700" }}>{previewPost.likes} إعجاب</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() =>
+                        Share.share({ message: `${previewPost.author.name} على SHAHINAZ:\n${previewPost.content}` })
+                      }
+                    >
+                      <Ionicons name="paper-plane-outline" size={21} color={COLORS.text} />
+                    </TouchableOpacity>
+                  </View>
+                  <TouchableOpacity onPress={() => toggleSave(previewPost.id)}>
+                    <Ionicons
+                      name={previewPost.savedByMe ? "bookmark" : "bookmark-outline"}
+                      size={22}
+                      color={COLORS.text}
+                    />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          )}
+        </View>
       </Modal>
     </View>
   );

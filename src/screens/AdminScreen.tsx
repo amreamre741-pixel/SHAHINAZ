@@ -36,7 +36,7 @@ const PERMISSION_META: { key: keyof RolePermissions; title: string; sub: string 
   { key: "canModerateContent", title: "صلاحيات الإشراف والأمان", sub: "مراجعة البلاغات وحذف المحتوى المخالف" },
 ];
 
-const API_HEALTH_URL = (process.env.EXPO_PUBLIC_API_URL || "https://shahinaz.onrender.com") + "/health";
+const API_HEALTH_URL = (process.env.EXPO_PUBLIC_API_URL || "https://shahinaz.onrender.com") + "/api/health";
 
 export default function AdminScreen({ onClose }: { onClose: () => void }) {
   const {
@@ -93,6 +93,14 @@ export default function AdminScreen({ onClose }: { onClose: () => void }) {
   const [showPin, setShowPin] = useState(false);
   const [pinging, setPinging] = useState(false);
   const [serverStatus, setServerStatus] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [toastMsg, setToastMsg] = useState("");
+  const toastTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function showToast(msg: string) {
+    setToastMsg(msg);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setToastMsg(""), 2400);
+  }
 
   const filteredUsers = useMemo(() => {
     const q = userSearch.trim().toLowerCase();
@@ -110,6 +118,7 @@ export default function AdminScreen({ onClose }: { onClose: () => void }) {
       const ms = Date.now() - start;
       if (res.ok) {
         setServerStatus({ ok: true, msg: `السيرفر وقاعدة Neon يعملان بامتياز · ${ms} ms` });
+        showToast(`✅ السيرفر متصل وسريع (${ms} ms)`);
       } else {
         setServerStatus({ ok: false, msg: `استجابة غير مكتملة (HTTP ${res.status}) · ${ms} ms` });
       }
@@ -139,8 +148,8 @@ export default function AdminScreen({ onClose }: { onClose: () => void }) {
           </TouchableOpacity>
         </View>
 
-        {/* Segmented Admin Tabs */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsRow}>
+        {/* All 6 Admin Tabs Visible in 3x2 Grid (No Hidden Tabs on Android RTL) */}
+        <View style={styles.tabsGrid}>
           {[
             { key: "overview", label: "📊 القيادة" },
             { key: "users", label: `👥 الأعضاء (${allUsers.length})` },
@@ -154,10 +163,18 @@ export default function AdminScreen({ onClose }: { onClose: () => void }) {
               style={[styles.tabPill, tab === t.key && styles.tabPillActive]}
               onPress={() => setTab(t.key as AdminTab)}
             >
-              <Text style={[styles.tabText, tab === t.key && styles.tabTextActive]}>{t.label}</Text>
+              <Text style={[styles.tabText, tab === t.key && styles.tabTextActive]} numberOfLines={1}>
+                {t.label}
+              </Text>
             </TouchableOpacity>
           ))}
-        </ScrollView>
+        </View>
+
+        {!!toastMsg && (
+          <View style={styles.toastBar}>
+            <Text style={styles.toastText}>{toastMsg}</Text>
+          </View>
+        )}
       </LinearGradient>
 
       <ScrollView style={styles.body} contentContainerStyle={{ paddingBottom: 46 }} showsVerticalScrollIndicator={false}>
@@ -165,28 +182,28 @@ export default function AdminScreen({ onClose }: { onClose: () => void }) {
         {tab === "overview" && (
           <>
             <View style={styles.kpiGrid}>
-              <View style={styles.kpiCard}>
+              <TouchableOpacity style={styles.kpiCard} onPress={() => setTab("users")}>
                 <Text style={styles.kpiNum}>{allUsers.length}</Text>
                 <Text style={styles.kpiLabel}>المستخدمون</Text>
-              </View>
-              <View style={styles.kpiCard}>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.kpiCard} onPress={() => setTab("content")}>
                 <Text style={styles.kpiNum}>{allPosts.length}</Text>
                 <Text style={styles.kpiLabel}>المنشورات</Text>
-              </View>
-              <View style={styles.kpiCard}>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.kpiCard} onPress={() => setTab("content")}>
                 <Text style={[styles.kpiNum, { color: COLORS.success }]}>{codOrders.length}</Text>
                 <Text style={styles.kpiLabel}>طلبات 58 ولاية</Text>
-              </View>
-              <View style={styles.kpiCard}>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.kpiCard} onPress={() => setTab("safety")}>
                 <Text style={[styles.kpiNum, { color: reports.length > 0 ? COLORS.danger : COLORS.verified }]}>
                   {reports.length}
                 </Text>
                 <Text style={styles.kpiLabel}>البلاغات</Text>
-              </View>
+              </TouchableOpacity>
             </View>
 
-            {/* Quick System Health Strip */}
-            <View style={styles.statusStrip}>
+            {/* Quick System Health Strip (Tappable to jump to System tab) */}
+            <TouchableOpacity style={styles.statusStrip} activeOpacity={0.8} onPress={() => setTab("system")}>
               <View style={styles.statusPill}>
                 <View style={[styles.statusDot, { backgroundColor: maintenanceMode ? COLORS.warn : COLORS.success }]} />
                 <Text style={styles.statusPillText}>{maintenanceMode ? "صيانة" : "النشر نشط"}</Text>
@@ -199,7 +216,7 @@ export default function AdminScreen({ onClose }: { onClose: () => void }) {
                 <View style={[styles.statusDot, { backgroundColor: audioRoomsEnabled ? COLORS.success : COLORS.danger }]} />
                 <Text style={styles.statusPillText}>{audioRoomsEnabled ? "الصوتيات نشطة" : "الصوتيات متوقفة"}</Text>
               </View>
-            </View>
+            </TouchableOpacity>
 
             {/* Broadcast Banner */}
             <View style={styles.card}>
@@ -215,8 +232,12 @@ export default function AdminScreen({ onClose }: { onClose: () => void }) {
                 <TouchableOpacity
                   style={styles.primaryBtn}
                   onPress={() => {
+                    if (!bannerInput.trim()) {
+                      Alert.alert("تنبيه", "اكتب نص الإعلان أولاً.");
+                      return;
+                    }
                     adminSetAnnouncement(bannerInput);
-                    Alert.alert("تم البث 📢", "سيظهر الإعلان فوراً أعلى الصفحة الرئيسية.");
+                    showToast("📢 تم بث الإعلان في أعلى الرئيسية!");
                   }}
                 >
                   <Text style={styles.btnText}>بث الإعلان الآن</Text>
@@ -227,6 +248,7 @@ export default function AdminScreen({ onClose }: { onClose: () => void }) {
                     onPress={() => {
                       setBannerInput("");
                       adminSetAnnouncement("");
+                      showToast("✓ تم إيقاف شريط الإعلان");
                     }}
                   >
                     <Text style={styles.outlineText}>إيقاف</Text>
@@ -248,10 +270,13 @@ export default function AdminScreen({ onClose }: { onClose: () => void }) {
               <TouchableOpacity
                 style={[styles.primaryBtn, { backgroundColor: COLORS.verified }]}
                 onPress={() => {
-                  if (!pushInput.trim()) return;
+                  if (!pushInput.trim()) {
+                    Alert.alert("تنبيه", "اكتب نص الإشعار أولاً.");
+                    return;
+                  }
                   adminSendGlobalNotification(pushInput);
                   setPushInput("");
-                  Alert.alert("تم الإرسال 🔔", "وصل الإشعار فوراً إلى جرس الإشعارات.");
+                  showToast("🔔 تم إرسال الإشعار الفوري للجميع!");
                 }}
               >
                 <Text style={styles.btnText}>إرسال إشعار فوري للجميع</Text>
@@ -262,7 +287,12 @@ export default function AdminScreen({ onClose }: { onClose: () => void }) {
             <View style={styles.card}>
               <View style={{ flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center" }}>
                 <Text style={styles.cardTitle}>📜 سجل نشاط الإدارة (Audit Log)</Text>
-                <TouchableOpacity onPress={adminClearLogs}>
+                <TouchableOpacity
+                  onPress={() => {
+                    adminClearLogs();
+                    showToast("✓ تم مسح سجل النشاط");
+                  }}
+                >
                   <Text style={{ color: COLORS.muted, fontSize: 11, fontWeight: "700" }}>مسح السجل</Text>
                 </TouchableOpacity>
               </View>
@@ -319,7 +349,15 @@ export default function AdminScreen({ onClose }: { onClose: () => void }) {
                     {!isMe && (
                       <TouchableOpacity
                         style={[styles.miniBtn, { backgroundColor: isBlocked ? COLORS.success : "rgba(239,68,68,0.18)" }]}
-                        onPress={() => (isBlocked ? unblockUser(u.id) : blockUser(u.id))}
+                        onPress={() => {
+                          if (isBlocked) {
+                            unblockUser(u.id);
+                            showToast(`✓ تم فك الحظر عن ${u.name}`);
+                          } else {
+                            blockUser(u.id);
+                            showToast(`🚫 تم حظر ${u.name}`);
+                          }
+                        }}
                       >
                         <Text style={{ color: isBlocked ? "#fff" : COLORS.danger, fontSize: 11, fontWeight: "700" }}>
                           {isBlocked ? "فك الحظر" : "🚫 حظر"}
@@ -338,7 +376,10 @@ export default function AdminScreen({ onClose }: { onClose: () => void }) {
                           styles.roleChip,
                           curRole === r.key && { borderColor: r.color, backgroundColor: "rgba(168,85,247,0.18)" },
                         ]}
-                        onPress={() => adminSetUserRole(u.id, r.key)}
+                        onPress={() => {
+                          adminSetUserRole(u.id, r.key);
+                          showToast(`✅ تم ترقية ${u.name} إلى ${r.label}`);
+                        }}
                       >
                         <Text style={{ color: curRole === r.key ? "#fff" : COLORS.muted, fontSize: 11, fontWeight: "700" }}>
                           {r.label}
@@ -349,13 +390,31 @@ export default function AdminScreen({ onClose }: { onClose: () => void }) {
 
                   {/* Quick Actions: Verify + Points */}
                   <View style={styles.row}>
-                    <TouchableOpacity style={styles.outlineBtn} onPress={() => adminToggleVerify(u.id)}>
+                    <TouchableOpacity
+                      style={styles.outlineBtn}
+                      onPress={() => {
+                        adminToggleVerify(u.id);
+                        showToast(u.verified ? `تم سحب التوثيق من ${u.name}` : `☑️ تم منح التوثيق الأزرق لـ ${u.name}`);
+                      }}
+                    >
                       <Text style={styles.outlineText}>{u.verified ? "سحب التوثيق ☑️" : "توثيق أزرق ☑️"}</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.outlineBtn} onPress={() => adminGivePoints(u.id, 500)}>
+                    <TouchableOpacity
+                      style={styles.outlineBtn}
+                      onPress={() => {
+                        adminGivePoints(u.id, 500);
+                        showToast(`🪙 تم منح +500 نقطة لـ ${u.name}`);
+                      }}
+                    >
                       <Text style={{ color: COLORS.warn, fontWeight: "700", fontSize: 12 }}>+500 🪙</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.outlineBtn} onPress={() => adminGivePoints(u.id, -100)}>
+                    <TouchableOpacity
+                      style={styles.outlineBtn}
+                      onPress={() => {
+                        adminGivePoints(u.id, -100);
+                        showToast(`تم خصم 100 نقطة من ${u.name}`);
+                      }}
+                    >
                       <Text style={{ color: COLORS.muted, fontWeight: "700", fontSize: 12 }}>-100</Text>
                     </TouchableOpacity>
                   </View>
@@ -395,18 +454,32 @@ export default function AdminScreen({ onClose }: { onClose: () => void }) {
               <Text style={styles.cardTitle}>
                 صلاحيات رتبة: {ROLES.find((r) => r.key === selectedRole)?.label}
               </Text>
-              {PERMISSION_META.map((perm) => (
-                <View key={perm.key} style={styles.toggleRow}>
-                  <Switch
-                    value={rolePermissions[selectedRole][perm.key]}
-                    onValueChange={(val) => adminUpdateRolePermission(selectedRole, perm.key, val)}
-                  />
-                  <View style={{ flex: 1, alignItems: "flex-end", paddingLeft: 10 }}>
-                    <Text style={styles.toggleLabel}>{perm.title}</Text>
-                    <Text style={styles.toggleSub}>{perm.sub}</Text>
-                  </View>
-                </View>
-              ))}
+              {PERMISSION_META.map((perm) => {
+                const enabled = rolePermissions[selectedRole][perm.key];
+                return (
+                  <TouchableOpacity
+                    key={perm.key}
+                    activeOpacity={0.75}
+                    style={styles.toggleRow}
+                    onPress={() => {
+                      adminUpdateRolePermission(selectedRole, perm.key, !enabled);
+                      showToast(`${!enabled ? "✅ تم تفعيل" : "🔒 تم إيقاف"}: ${perm.title}`);
+                    }}
+                  >
+                    <Switch
+                      value={enabled}
+                      onValueChange={(val) => {
+                        adminUpdateRolePermission(selectedRole, perm.key, val);
+                        showToast(`${val ? "✅ تم تفعيل" : "🔒 تم إيقاف"}: ${perm.title}`);
+                      }}
+                    />
+                    <View style={{ flex: 1, alignItems: "flex-end", paddingLeft: 10 }}>
+                      <Text style={styles.toggleLabel}>{perm.title}</Text>
+                      <Text style={styles.toggleSub}>{perm.sub}</Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           </>
         )}
@@ -427,17 +500,35 @@ export default function AdminScreen({ onClose }: { onClose: () => void }) {
                     {p.content}
                   </Text>
                   <View style={styles.row}>
-                    <TouchableOpacity style={styles.outlineBtn} onPress={() => adminTogglePinPost(p.id)}>
+                    <TouchableOpacity
+                      style={styles.outlineBtn}
+                      onPress={() => {
+                        adminTogglePinPost(p.id);
+                        showToast(p.isPinned ? "تم فك تثبيت المنشور" : "📌 تم تثبيت المنشور أعلى الرئيسية");
+                      }}
+                    >
                       <Text style={{ color: COLORS.verified, fontWeight: "700", fontSize: 11.5 }}>
                         {p.isPinned ? "فك التثبيت" : "📌 تثبيت"}
                       </Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.outlineBtn} onPress={() => adminToggleSponsor(p.id)}>
+                    <TouchableOpacity
+                      style={styles.outlineBtn}
+                      onPress={() => {
+                        adminToggleSponsor(p.id);
+                        showToast(p.isSponsored ? "تم إيقاف ترويج المنشور" : "⭐ تم تمييز المنشور كمموّل");
+                      }}
+                    >
                       <Text style={{ color: COLORS.warn, fontWeight: "700", fontSize: 11.5 }}>
                         {p.isSponsored ? "إلغاء الترويج" : "⭐ مموّل"}
                       </Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.dangerBtn} onPress={() => adminDeletePost(p.id)}>
+                    <TouchableOpacity
+                      style={styles.dangerBtn}
+                      onPress={() => {
+                        adminDeletePost(p.id);
+                        showToast("🗑️ تم حذف المنشور نهائياً");
+                      }}
+                    >
                       <Text style={styles.dangerText}>🗑️ حذف</Text>
                     </TouchableOpacity>
                   </View>
@@ -599,40 +690,95 @@ export default function AdminScreen({ onClose }: { onClose: () => void }) {
           <>
             <View style={styles.card}>
               <Text style={styles.cardTitle}>⚡ مفاتيح التحكم الحية (Kill Switches)</Text>
-              <View style={styles.toggleRow}>
-                <Switch value={maintenanceMode} onValueChange={adminToggleMaintenance} />
-                <View style={{ alignItems: "flex-end" }}>
+              <TouchableOpacity
+                activeOpacity={0.75}
+                style={styles.toggleRow}
+                onPress={() => {
+                  adminToggleMaintenance();
+                  showToast(!maintenanceMode ? "⚡ تم تفعيل وضع الصيانة (توقف النشر)" : "✅ تم إيقاف الصيانة وعودة النشر");
+                }}
+              >
+                <Switch
+                  value={maintenanceMode}
+                  onValueChange={() => {
+                    adminToggleMaintenance();
+                    showToast(!maintenanceMode ? "⚡ تم تفعيل وضع الصيانة (توقف النشر)" : "✅ تم إيقاف الصيانة وعودة النشر");
+                  }}
+                />
+                <View style={{ flex: 1, alignItems: "flex-end", paddingLeft: 10 }}>
                   <Text style={styles.toggleLabel}>وضع الصيانة (إيقاف النشر)</Text>
                   <Text style={styles.toggleSub}>تجميد النشر مؤقتاً أثناء التحديثات</Text>
                 </View>
-              </View>
-              <View style={styles.toggleRow}>
-                <Switch value={allowRegistration} onValueChange={adminToggleRegistration} />
-                <View style={{ alignItems: "flex-end" }}>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                activeOpacity={0.75}
+                style={styles.toggleRow}
+                onPress={() => {
+                  adminToggleRegistration();
+                  showToast(!allowRegistration ? "✅ تم فتح التسجيل للحسابات الجديدة" : "🔒 تم إغلاق التسجيل الجديد مؤقتاً");
+                }}
+              >
+                <Switch
+                  value={allowRegistration}
+                  onValueChange={() => {
+                    adminToggleRegistration();
+                    showToast(!allowRegistration ? "✅ تم فتح التسجيل للحسابات الجديدة" : "🔒 تم إغلاق التسجيل الجديد مؤقتاً");
+                  }}
+                />
+                <View style={{ flex: 1, alignItems: "flex-end", paddingLeft: 10 }}>
                   <Text style={styles.toggleLabel}>السماح بالتسجيل الجديد</Text>
                   <Text style={styles.toggleSub}>فتح أو إغلاق إنشاء حسابات جديدة</Text>
                 </View>
-              </View>
-              <View style={styles.toggleRow}>
-                <Switch value={marketEnabled} onValueChange={adminToggleMarket} />
-                <View style={{ alignItems: "flex-end" }}>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                activeOpacity={0.75}
+                style={styles.toggleRow}
+                onPress={() => {
+                  adminToggleMarket();
+                  showToast(!marketEnabled ? "🛒 تم تفعيل قسم السوق" : "🔒 تم إيقاف قسم السوق مؤقتاً");
+                }}
+              >
+                <Switch
+                  value={marketEnabled}
+                  onValueChange={() => {
+                    adminToggleMarket();
+                    showToast(!marketEnabled ? "🛒 تم تفعيل قسم السوق" : "🔒 تم إيقاف قسم السوق مؤقتاً");
+                  }}
+                />
+                <View style={{ flex: 1, alignItems: "flex-end", paddingLeft: 10 }}>
                   <Text style={styles.toggleLabel}>تفعيل السوق (Marketplace)</Text>
                   <Text style={styles.toggleSub}>إظهار أو إيقاف قسم البيع والشراء</Text>
                 </View>
-              </View>
-              <View style={styles.toggleRow}>
-                <Switch value={audioRoomsEnabled} onValueChange={adminToggleAudioRooms} />
-                <View style={{ alignItems: "flex-end" }}>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                activeOpacity={0.75}
+                style={styles.toggleRow}
+                onPress={() => {
+                  adminToggleAudioRooms();
+                  showToast(!audioRoomsEnabled ? "🎙️ تم تفعيل الغرف الصوتية" : "🔇 تم إيقاف الغرف الصوتية مؤقتاً");
+                }}
+              >
+                <Switch
+                  value={audioRoomsEnabled}
+                  onValueChange={() => {
+                    adminToggleAudioRooms();
+                    showToast(!audioRoomsEnabled ? "🎙️ تم تفعيل الغرف الصوتية" : "🔇 تم إيقاف الغرف الصوتية مؤقتاً");
+                  }}
+                />
+                <View style={{ flex: 1, alignItems: "flex-end", paddingLeft: 10 }}>
                   <Text style={styles.toggleLabel}>تفعيل الغرف الصوتية 🎙️</Text>
                   <Text style={styles.toggleSub}>تشغيل أو إيقاف القعدات الصوتية</Text>
                 </View>
-              </View>
+              </TouchableOpacity>
             </View>
 
             {/* Live Server & Neon Health Diagnostics */}
             <View style={styles.card}>
               <Text style={styles.cardTitle}>🌐 فحص السيرفر وقاعدة البيانات (Render + Neon)</Text>
-              <Text style={styles.smallLabel}>API: https://shahinaz.onrender.com · DB: Neon PostgreSQL</Text>
+              <Text style={styles.smallLabel}>API: https://shahinaz.onrender.com/api/health · DB: Neon</Text>
               {serverStatus && (
                 <View
                   style={[
@@ -688,7 +834,7 @@ export default function AdminScreen({ onClose }: { onClose: () => void }) {
                   }
                   adminChangePin(digits);
                   setNewPin("");
-                  Alert.alert("تم الحفظ 🔐", "تم تحديث رمز بوابة المطور وحفظه على جهازك.");
+                  showToast("🔐 تم تحديث رمز البوابة السري وحفظه بنجاح!");
                 }}
               >
                 <Text style={styles.btnText}>تحديث رمز البوابة السري</Text>
@@ -706,7 +852,7 @@ export default function AdminScreen({ onClose }: { onClose: () => void }) {
                     style: "destructive",
                     onPress: () => {
                       adminResetSystemSettings();
-                      Alert.alert("تم الضبط ✓", "تمت إعادة إعدادات النظام للوضع الافتراضي.");
+                      showToast("🔄 تمت إعادة ضبط جميع الإعدادات للوضع الافتراضي");
                     },
                   },
                 ])
@@ -748,18 +894,37 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  tabsRow: { paddingHorizontal: 14, gap: 8 },
+  tabsGrid: {
+    flexDirection: "row-reverse",
+    flexWrap: "wrap",
+    paddingHorizontal: 12,
+    gap: 6,
+  },
   tabPill: {
-    paddingHorizontal: 14,
+    width: "31.5%",
     paddingVertical: 8,
-    borderRadius: 999,
+    paddingHorizontal: 6,
+    borderRadius: 10,
     backgroundColor: COLORS.surface,
     borderWidth: 0.5,
     borderColor: COLORS.border,
+    alignItems: "center",
   },
   tabPillActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  tabText: { color: COLORS.muted, fontSize: 12, fontWeight: "700" },
+  tabText: { color: COLORS.muted, fontSize: 11.5, fontWeight: "700" },
   tabTextActive: { color: "#fff" },
+  toastBar: {
+    marginTop: 10,
+    marginHorizontal: 14,
+    backgroundColor: "rgba(34,197,94,0.18)",
+    borderColor: COLORS.success,
+    borderWidth: 0.6,
+    borderRadius: 10,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    alignItems: "center",
+  },
+  toastText: { color: COLORS.success, fontSize: 12, fontWeight: "700", textAlign: "center" },
   body: { flex: 1, padding: 14 },
   kpiGrid: { flexDirection: "row-reverse", flexWrap: "wrap", gap: 8, marginBottom: 12 },
   kpiCard: {
