@@ -69,7 +69,7 @@ export default function AuthScreen() {
           <Text style={[styles.logo, { color: theme.text }]}>SHAHINAZ</Text>
           <View style={[styles.editionBadge, { backgroundColor: theme.primarySoft, borderColor: theme.borderGlow }]}>
             <Text style={{ color: theme.primary, fontSize: 10.5, fontWeight: "900", letterSpacing: 1.4 }}>
-              ✦ OBSIDIAN COUTURE · ULTRA 4.0 ✦
+              ✦ ROYAL PLATINUM · ULTRA 5.0 ✦
             </Text>
           </View>
           <Text style={[styles.subtitle, { color: theme.muted }]}>

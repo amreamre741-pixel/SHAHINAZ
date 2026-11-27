@@ -101,7 +101,7 @@ let appVersionConfig = {
   latestVersion: "1.0.0",
   minVersion: "1.0.0",
   forceUpdate: false,
-  releaseNotes: "تحديث SHAHINAZ Ultra 4.0 (Obsidian Couture) — هوية فاخرة فريدة بـ 4 ثيمات كاملة + شريط سفلي عائم + ستوري بطاقات + بطاقات زجاجية + ردود سريعة ومكتشف المبدعين",
+  releaseNotes: "تحديث SHAHINAZ Ultra 5.0 (Royal Platinum) — شاشة دخول ملكية متحركة + 6 ثيمات (بما فيها الوضع النهاري الفاخر) + بث مباشر تفاعلي مع تسوّق حي + محفظة SHAHINAZ Pay + مهام يومية تلقائية",
   downloadUrl: "https://expo.dev/accounts/shahinaz-1994/projects/shahinaz-1994/builds",
 };
 

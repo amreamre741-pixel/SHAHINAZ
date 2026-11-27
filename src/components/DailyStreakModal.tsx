@@ -12,15 +12,41 @@ export default function DailyStreakModal({ visible, onClose }: { visible: boolea
     currentUser,
     streakDays,
     claimedStreakToday,
+    dailyMissions,
     theme,
     themeId,
     setThemeId,
     claimDailyStreak,
+    claimMissionReward,
     redeemReward,
   } = useApp();
 
   const points = currentUser?.points ?? 150;
   const activeDayIdx = streakDays >= 7 ? 0 : Math.max(0, streakDays);
+
+  const missionsList = [
+    {
+      id: "likes" as const,
+      title: "❤️ أعجب بـ 3 منشورات اليوم",
+      cur: Math.min(3, dailyMissions.likesCount),
+      target: 3,
+      reward: 40,
+    },
+    {
+      id: "comments" as const,
+      title: "💬 اكتب تعليقاً تفاعلياً واحداً",
+      cur: Math.min(1, dailyMissions.commentsCount),
+      target: 1,
+      reward: 50,
+    },
+    {
+      id: "saves" as const,
+      title: "🔖 احفظ منشوراً في مفضلتك",
+      cur: Math.min(1, dailyMissions.savesCount),
+      target: 1,
+      reward: 30,
+    },
+  ];
 
   function handleClaim() {
     const res = claimDailyStreak();
@@ -30,6 +56,11 @@ export default function DailyStreakModal({ visible, onClose }: { visible: boolea
   function handleRedeem(kind: "verify" | "vip" | "boost", cost: number) {
     const res = redeemReward(kind, cost);
     Alert.alert(res.ok ? "✨ تم التفعيل بنجاح!" : "رصيد غير كافٍ", res.message);
+  }
+
+  function handleMission(id: "likes" | "comments" | "saves") {
+    const res = claimMissionReward(id);
+    Alert.alert(res.ok ? "🎯 مهمة مكتملة!" : "المهمة اليومية", res.message);
   }
 
   return (
@@ -42,7 +73,7 @@ export default function DailyStreakModal({ visible, onClose }: { visible: boolea
               <LinearGradient colors={theme.btnGrad} style={styles.iconPill}>
                 <Ionicons name="flame" size={18} color={theme.btnText} />
               </LinearGradient>
-              <Text style={[styles.title, { color: theme.text }]}>المكافآت اليومية ومتجر النقاط</Text>
+              <Text style={[styles.title, { color: theme.text }]}>المكافآت، المهام، ومتجر النقاط</Text>
             </View>
             <TouchableOpacity onPress={onClose} style={[styles.closeBtn, { backgroundColor: theme.surface2 }]}>
               <Ionicons name="close" size={20} color={theme.text} />
@@ -108,6 +139,44 @@ export default function DailyStreakModal({ visible, onClose }: { visible: boolea
               </TouchableOpacity>
             </View>
 
+            {/* Auto-Tracked Live Daily Missions */}
+            <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.borderGlow }]}>
+              <Text style={[styles.cardTitle, { color: theme.text }]}>🎯 مهامك اليومية (تُحسب تلقائياً)</Text>
+              {missionsList.map((m) => {
+                const claimed = dailyMissions.claimedIds.includes(m.id);
+                const ready = m.cur >= m.target && !claimed;
+                const pct = Math.round((m.cur / m.target) * 100);
+                return (
+                  <View key={m.id} style={[styles.missionBox, { backgroundColor: theme.surface2, borderColor: theme.border }]}>
+                    <View style={{ flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center" }}>
+                      <Text style={{ color: theme.text, fontSize: 12.5, fontWeight: "800" }}>{m.title}</Text>
+                      <TouchableOpacity onPress={() => handleMission(m.id)} disabled={claimed}>
+                        {claimed ? (
+                          <Text style={{ color: theme.success, fontSize: 11.5, fontWeight: "900" }}>تم الاستلام ✓</Text>
+                        ) : ready ? (
+                          <LinearGradient colors={theme.btnGrad} style={styles.missionClaimPill}>
+                            <Text style={{ color: theme.btnText, fontSize: 11, fontWeight: "900" }}>استلم +{m.reward} 🪙</Text>
+                          </LinearGradient>
+                        ) : (
+                          <Text style={{ color: theme.primary, fontSize: 11.5, fontWeight: "800" }}>
+                            {m.cur}/{m.target} (+{m.reward}🪙)
+                          </Text>
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                    <View style={{ height: 5, backgroundColor: "rgba(255,255,255,0.1)", borderRadius: 3, overflow: "hidden", marginTop: 7 }}>
+                      <LinearGradient
+                        colors={theme.btnGrad}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                        style={{ width: `${pct}%`, height: "100%" }}
+                      />
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+
             {/* Real SHAHINAZ Coin Store */}
             <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
               <Text style={[styles.cardTitle, { color: theme.text }]}>🛍️ استبدل نقاطك بمزايا حقيقية فوراً</Text>
@@ -133,9 +202,9 @@ export default function DailyStreakModal({ visible, onClose }: { visible: boolea
               ))}
             </View>
 
-            {/* Full-App Luxury Skin Switcher */}
+            {/* Full-App 6 Luxury Skins Quick Picker */}
             <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-              <Text style={[styles.cardTitle, { color: theme.text }]}>🎨 هويات SHAHINAZ الملكية (مجاناً ✨)</Text>
+              <Text style={[styles.cardTitle, { color: theme.text }]}>🎨 هويات SHAHINAZ الملكية (6 ثيمات ✨)</Text>
               <View style={styles.themesRow}>
                 {THEME_LIST.map((t) => (
                   <TouchableOpacity
@@ -167,7 +236,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 30,
     paddingHorizontal: 16,
     paddingTop: 10,
-    maxHeight: "88%",
+    maxHeight: "90%",
     borderTopWidth: 1.2,
   },
   handle: {
@@ -185,14 +254,8 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   iconPill: { width: 32, height: 32, borderRadius: 11, alignItems: "center", justifyContent: "center" },
-  title: { fontSize: 16, fontWeight: "900" },
-  closeBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  title: { fontSize: 15.5, fontWeight: "900" },
+  closeBtn: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center" },
   heroCard: {
     flexDirection: "row-reverse",
     justifyContent: "space-between",
@@ -202,26 +265,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   trophyOrb: { width: 54, height: 54, borderRadius: 18, alignItems: "center", justifyContent: "center" },
-  card: {
-    borderRadius: 20,
-    padding: 14,
-    borderWidth: 1,
-    gap: 10,
-  },
+  card: { borderRadius: 20, padding: 14, borderWidth: 1, gap: 10 },
   cardTitle: { fontSize: 14, fontWeight: "900", textAlign: "right" },
   daysRow: { flexDirection: "row-reverse", justifyContent: "space-between", gap: 4 },
-  dayBox: {
-    flex: 1,
-    alignItems: "center",
-    paddingVertical: 9,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  claimBtn: {
-    borderRadius: 14,
-    padding: 13,
-    alignItems: "center",
-  },
+  dayBox: { flex: 1, alignItems: "center", paddingVertical: 9, borderRadius: 12, borderWidth: 1 },
+  claimBtn: { borderRadius: 14, padding: 13, alignItems: "center" },
+  missionBox: { borderRadius: 14, padding: 11, borderWidth: 1 },
+  missionClaimPill: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999 },
   shopItem: {
     flexDirection: "row",
     alignItems: "center",
@@ -230,12 +280,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
   },
-  costPill: {
-    borderWidth: 0.8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 10,
-  },
+  costPill: { borderWidth: 0.8, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
   themesRow: { flexDirection: "row-reverse", flexWrap: "wrap", gap: 8 },
   themeChip: {
     flexDirection: "row-reverse",

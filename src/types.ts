@@ -142,3 +142,20 @@ export interface CodOrder {
   wilaya: string;
   createdAt: string;
 }
+
+export interface WalletTransaction {
+  id: string;
+  title: string;
+  deltaCoins: number;
+  emoji: string;
+  time: string;
+}
+
+export interface DailyMissionState {
+  dateKey: string;
+  likesCount: number;
+  commentsCount: number;
+  savesCount: number;
+  claimedIds: string[];
+}
+

@@ -115,15 +115,15 @@ export default function AdminScreen({ onClose }: { onClose: () => void }) {
 
   return (
     <SafeAreaView style={styles.screen} edges={["top", "bottom"]}>
-      {/* Luxury SHAHINAZ DevOS v2.0 Header */}
-      <LinearGradient colors={["#1e1b4b", "#09090b", "#000000"]} style={styles.header}>
+      {/* Luxury SHAHINAZ DevOS v3.0 Obsidian Gold Header */}
+      <LinearGradient colors={["#241A08", "#0D101B", "#05060B"]} style={styles.header}>
         <View style={styles.headerRow}>
           <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10 }}>
-            <LinearGradient colors={["#a855f7", "#ec4899", "#3897f0"]} style={styles.badgeIcon}>
-              <Ionicons name="terminal" size={20} color="#fff" />
+            <LinearGradient colors={["#FDE68A", "#F59E0B", "#B45309"]} style={styles.badgeIcon}>
+              <Ionicons name="terminal" size={20} color="#090A0F" />
             </LinearGradient>
             <View style={{ alignItems: "flex-end" }}>
-              <Text style={styles.title}>SHAHINAZ DevOS v2.0</Text>
+              <Text style={styles.title}>SHAHINAZ DevOS v3.0</Text>
               <Text style={styles.subtitle}>مركز قيادة المطور · كشف الأخطاء · Neon Cloud · أدوات متقدمة</Text>
             </View>
           </View>

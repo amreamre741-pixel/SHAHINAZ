@@ -7,6 +7,7 @@ import type {
   AudioRoom,
   ChatThread,
   CodOrder,
+  DailyMissionState,
   GroupItem,
   MarketItem,
   NoteItem,
@@ -17,6 +18,7 @@ import type {
   Story,
   User,
   UserRole,
+  WalletTransaction,
 } from "../types";
 
 export interface ReportItem {
@@ -81,6 +83,8 @@ interface AppContextValue {
   accentColor: string;
   streakDays: number;
   claimedStreakToday: boolean;
+  walletTransactions: WalletTransaction[];
+  dailyMissions: DailyMissionState;
   followingUserIds: string[];
   blockedUserIds: string[];
   reportedPostIds: string[];
@@ -108,6 +112,9 @@ interface AppContextValue {
   claimDailyStreak: () => { ok: boolean; reward: number; message: string };
   redeemReward: (kind: "verify" | "vip" | "boost", cost: number) => { ok: boolean; message: string };
   sendPostGift: (postId: string, emoji: string, cost: number) => { ok: boolean; message: string };
+  sendLiveGift: (hostName: string, emoji: string, cost: number) => { ok: boolean; message: string };
+  transferCoins: (recipientId: string, amount: number) => { ok: boolean; message: string };
+  claimMissionReward: (missionId: "likes" | "comments" | "saves") => { ok: boolean; message: string };
   toggleFollowUser: (userId: string) => void;
   toggleLike: (postId: string) => void;
   setReaction: (postId: string, emoji: ReactionEmoji) => void;
@@ -420,6 +427,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }
   const [streakDays, setStreakDays] = useState<number>(1);
   const [lastStreakDate, setLastStreakDate] = useState<string>("");
+  const [walletTransactions, setWalletTransactions] = useState<WalletTransaction[]>([
+    { id: "tx_welcome", title: "مكافأة الترحيب الملكية في SHAHINAZ", deltaCoins: 150, emoji: "👑", time: "اليوم" },
+  ]);
+  const [dailyMissions, setDailyMissions] = useState<DailyMissionState>({
+    dateKey: new Date().toISOString().slice(0, 10),
+    likesCount: 0,
+    commentsCount: 0,
+    savesCount: 0,
+    claimedIds: [],
+  });
   const [followingUserIds, setFollowingUserIds] = useState<string[]>(["u_1", "u_2"]);
   const [blockedUserIds, setBlockedUserIds] = useState<string[]>([]);
   const [reportedPostIds, setReportedPostIds] = useState<string[]>([]);
@@ -434,7 +451,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [bannedWords, setBannedWords] = useState<string[]>(["احتيال", "سبام"]);
   const [rolePermissions, setRolePermissions] = useState<Record<UserRole, RolePermissions>>(DEFAULT_ROLE_PERMISSIONS);
   const [adminLogs, setAdminLogs] = useState<AdminLogItem[]>([
-    { id: "lg_1", action: "تشغيل نظام إدارة SHAHINAZ DevOS v2.1", time: "اليوم" },
+    { id: "lg_1", action: "تشغيل نظام إدارة SHAHINAZ DevOS v3.0", time: "اليوم" },
   ]);
   const adminLoadedRef = useRef(false);
 
@@ -442,6 +459,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const now = new Date();
     const t = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
     setAdminLogs((prev) => [{ id: `lg_${Date.now()}`, action, time: t }, ...prev.slice(0, 39)]);
+  }
+
+  function recordWalletTx(title: string, deltaCoins: number, emoji: string) {
+    const now = new Date();
+    const t = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+    setWalletTransactions((prev) => [{ id: `tx_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`, title, deltaCoins, emoji, time: t }, ...prev.slice(0, 29)]);
   }
 
   async function refreshPosts(activeToken?: string | null) {
@@ -507,6 +530,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           }
           if (typeof cfg.streakDays === "number") setStreakDays(cfg.streakDays);
           if (typeof cfg.lastStreakDate === "string") setLastStreakDate(cfg.lastStreakDate);
+          if (Array.isArray(cfg.walletTransactions)) setWalletTransactions(cfg.walletTransactions);
+          const today = new Date().toISOString().slice(0, 10);
+          if (cfg.dailyMissions && cfg.dailyMissions.dateKey === today) {
+            setDailyMissions(cfg.dailyMissions);
+          }
           if (Array.isArray(cfg.bannedWords)) setBannedWords(cfg.bannedWords);
           if (cfg.rolePermissions) setRolePermissions({ ...DEFAULT_ROLE_PERMISSIONS, ...cfg.rolePermissions });
         }
@@ -539,6 +567,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         accentColor,
         streakDays,
         lastStreakDate,
+        walletTransactions,
+        dailyMissions,
         bannedWords,
         rolePermissions,
       })
@@ -554,6 +584,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     accentColor,
     streakDays,
     lastStreakDate,
+    walletTransactions,
+    dailyMissions,
     bannedWords,
     rolePermissions,
   ]);
@@ -714,6 +746,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (token && !postId.startsWith("p_")) {
       apiFetch(`/api/posts/${postId}/like`, token, { method: "POST" }).catch(() => {});
     }
+    const target = posts.find((p) => p.id === postId);
+    if (target && !target.likedByMe) {
+      setDailyMissions((m) => ({ ...m, likesCount: m.likesCount + 1 }));
+    }
     setPosts((prev) =>
       prev.map((p) =>
         p.id === postId
@@ -724,6 +760,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }
 
   function toggleSave(postId: string) {
+    const target = posts.find((p) => p.id === postId);
+    if (target && !target.savedByMe) {
+      setDailyMissions((m) => ({ ...m, savesCount: m.savesCount + 1 }));
+    }
     setPosts((prev) => prev.map((p) => (p.id === postId ? { ...p, savedByMe: !p.savedByMe } : p)));
   }
 
@@ -735,6 +775,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         body: JSON.stringify({ text: text.trim() }),
       }).catch(() => {});
     }
+    setDailyMissions((m) => ({ ...m, commentsCount: m.commentsCount + 1 }));
     setPosts((prev) =>
       prev.map((p) =>
         p.id === postId
@@ -1140,6 +1181,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       },
       ...prev,
     ]);
+    recordWalletTx(`مكافأة الستريك اليومي (يوم ${nextDay})`, reward, "🔥");
     return { ok: true, reward, message: `تمت إضافة +${reward} نقطة 🪙 إلى رصيدك بنجاح!` };
   }
 
@@ -1183,6 +1225,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       vip: "مبروك! تمت ترقية حسابك إلى رتبة VIP الذهبية 👑!",
       boost: "تم ترويج وتثبيت أحدث منشور لك بنجاح 🚀⭐!",
     };
+    const txNames = { verify: "تفعيل شارة التوثيق الأزرق", vip: "ترقية حساب VIP الذهبي", boost: "ترويج وتثبيت منشور" };
+    recordWalletTx(txNames[kind], -cost, "🛍️");
     return { ok: true, message: labels[kind] };
   }
 
@@ -1223,7 +1267,79 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           : p
       )
     );
+    recordWalletTx(`هدية ${emoji} إلى ${targetPost.author.name}`, -cost, "🎁");
     return { ok: true, message: `تم إرسال هدية ${emoji} إلى ${targetPost.author.name} بنجاح! 🎁` };
+  }
+
+  function sendLiveGift(hostName: string, emoji: string, cost: number) {
+    if (!currentUser) return { ok: false, message: "يرجى تسجيل الدخول." };
+    const pts = currentUser.points ?? 150;
+    if (pts < cost) {
+      return { ok: false, message: `رصيدك (${pts} 🪙) لا يكفي لهذه الهدية (${cost} 🪙).` };
+    }
+    setCurrentUser((prev) => {
+      if (!prev) return prev;
+      const updated = { ...prev, points: Math.max(0, (prev.points ?? 150) - cost) };
+      AsyncStorage.setItem("shahinaz_user", JSON.stringify(updated)).catch(() => {});
+      return updated;
+    });
+    recordWalletTx(`هدية بث مباشر ${emoji} إلى ${hostName}`, -cost, "🔴");
+    return { ok: true, message: `تم إرسال هدية ${emoji} في البث المباشر!` };
+  }
+
+  function transferCoins(recipientId: string, amount: number) {
+    if (!currentUser) return { ok: false, message: "يرجى تسجيل الدخول." };
+    const pts = currentUser.points ?? 150;
+    if (amount <= 0 || pts < amount) {
+      return { ok: false, message: `رصيدك الحالي (${pts} 🪙) لا يكفي لتحويل ${amount} 🪙.` };
+    }
+    const target = users.find((u) => u.id === recipientId);
+    if (!target) return { ok: false, message: "المستخدم غير موجود." };
+    setCurrentUser((prev) => {
+      if (!prev) return prev;
+      const updated = { ...prev, points: Math.max(0, (prev.points ?? 150) - amount) };
+      AsyncStorage.setItem("shahinaz_user", JSON.stringify(updated)).catch(() => {});
+      return updated;
+    });
+    setUsers((prev) =>
+      prev.map((u) => (u.id === recipientId ? { ...u, points: (u.points ?? 100) + amount } : u))
+    );
+    recordWalletTx(`تحويل نقاط إلى ${target.name}`, -amount, "💸");
+    setNotifications((prev) => [
+      {
+        id: `n_tx_${Date.now()}`,
+        emoji: "💸",
+        text: `تم تحويل ${amount} 🪙 بنجاح إلى ${target.name}`,
+        time: "الآن",
+        read: false,
+      },
+      ...prev,
+    ]);
+    return { ok: true, message: `تم تحويل ${amount} 🪙 إلى ${target.name} بنجاح!` };
+  }
+
+  function claimMissionReward(missionId: "likes" | "comments" | "saves") {
+    if (!currentUser) return { ok: false, message: "يرجى تسجيل الدخول." };
+    if (dailyMissions.claimedIds.includes(missionId)) {
+      return { ok: false, message: "لقد استلمت مكافأة هذه المهمة اليوم بالفعل!" };
+    }
+    const config = {
+      likes: { cur: dailyMissions.likesCount, target: 3, reward: 40, label: "مهمة الإعجابات اليومية ❤️" },
+      comments: { cur: dailyMissions.commentsCount, target: 1, reward: 50, label: "مهمة التعليق اليومي 💬" },
+      saves: { cur: dailyMissions.savesCount, target: 1, reward: 30, label: "مهمة حفظ المنشورات 🔖" },
+    }[missionId];
+    if (config.cur < config.target) {
+      return { ok: false, message: `أكمل المهمة أولاً (${config.cur}/${config.target}) ثم استلم +${config.reward} 🪙!` };
+    }
+    setDailyMissions((m) => ({ ...m, claimedIds: [...m.claimedIds, missionId] }));
+    setCurrentUser((prev) => {
+      if (!prev) return prev;
+      const updated = { ...prev, points: (prev.points ?? 150) + config.reward };
+      AsyncStorage.setItem("shahinaz_user", JSON.stringify(updated)).catch(() => {});
+      return updated;
+    });
+    recordWalletTx(config.label, config.reward, "🎯");
+    return { ok: true, message: `مبروك! تمت إضافة +${config.reward} 🪙 لمحفظتك من ${config.label}!` };
   }
 
   const visiblePosts = posts
@@ -1255,6 +1371,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         accentColor,
         streakDays,
         claimedStreakToday,
+        walletTransactions,
+        dailyMissions,
         followingUserIds,
         blockedUserIds,
         reportedPostIds,
@@ -1282,6 +1400,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         claimDailyStreak,
         redeemReward,
         sendPostGift,
+        sendLiveGift,
+        transferCoins,
+        claimMissionReward,
         toggleFollowUser,
         toggleLike,
         setReaction,

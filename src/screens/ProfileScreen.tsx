@@ -21,6 +21,7 @@ import AdminScreen from "./AdminScreen";
 import DevVaultModal from "../components/DevVaultModal";
 import DailyStreakModal from "../components/DailyStreakModal";
 import ThemeStudioModal from "../components/ThemeStudioModal";
+import WalletModal from "../components/WalletModal";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const GRID_SIZE = (SCREEN_WIDTH - 36) / 3;
@@ -55,6 +56,7 @@ export default function ProfileScreen() {
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
   const [streakOpen, setStreakOpen] = useState(false);
   const [themeOpen, setThemeOpen] = useState(false);
+  const [walletOpen, setWalletOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(currentUser?.name || "");
   const [editBio, setEditBio] = useState(currentUser?.bio || "");
@@ -240,11 +242,18 @@ export default function ProfileScreen() {
 
         {/* Action Buttons Row */}
         <View style={styles.btnRow}>
-          <TouchableOpacity style={{ flex: 1.25 }} activeOpacity={0.88} onPress={() => setAnalyticsOpen(true)}>
+          <TouchableOpacity style={{ flex: 1.15 }} activeOpacity={0.88} onPress={() => setAnalyticsOpen(true)}>
             <LinearGradient colors={theme.btnGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.primaryActionBtn}>
-              <Ionicons name="stats-chart" size={15} color={theme.btnText} />
-              <Text style={{ color: theme.btnText, fontWeight: "900", fontSize: 12.5 }}>إحصائياتي</Text>
+              <Ionicons name="stats-chart" size={14} color={theme.btnText} />
+              <Text style={{ color: theme.btnText, fontWeight: "900", fontSize: 12 }}>إحصائياتي</Text>
             </LinearGradient>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.glassBtn, { backgroundColor: theme.surface, borderColor: theme.borderGlow, flexDirection: "row-reverse", gap: 4 }]}
+            onPress={() => setWalletOpen(true)}
+          >
+            <Ionicons name="card-outline" size={14} color={theme.primary} />
+            <Text style={{ color: theme.primary, fontWeight: "900", fontSize: 12 }}>محفظتي</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.glassBtn, { backgroundColor: theme.surface, borderColor: theme.border }]}
@@ -254,15 +263,15 @@ export default function ProfileScreen() {
               setEditing((v) => !v);
             }}
           >
-            <Text style={{ color: theme.text, fontWeight: "800", fontSize: 12.5 }}>
+            <Text style={{ color: theme.text, fontWeight: "800", fontSize: 12 }}>
               {editing ? "إغلاق" : "تعديل"}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.glassBtn, { backgroundColor: theme.surface, borderColor: theme.border }]}
+            style={[styles.glassBtn, { flex: 0.72, backgroundColor: theme.surface, borderColor: theme.border }]}
             onPress={() => Share.share({ message: `تابعني على تطبيق SHAHINAZ: @${currentUser.username}` })}
           >
-            <Text style={{ color: theme.text, fontWeight: "800", fontSize: 12.5 }}>مشاركة</Text>
+            <Ionicons name="share-social-outline" size={16} color={theme.text} />
           </TouchableOpacity>
         </View>
 
@@ -416,7 +425,7 @@ export default function ProfileScreen() {
             onPress={handleSecretVersionTap}
             style={{ alignItems: "center", paddingTop: 14, paddingBottom: 6 }}
           >
-            <Text style={{ color: theme.muted, fontSize: 11.5 }}>SHAHINAZ Ultra 4.0 · Obsidian Couture</Text>
+            <Text style={{ color: theme.muted, fontSize: 11.5 }}>SHAHINAZ Ultra 5.0 · Royal Platinum</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -586,6 +595,7 @@ export default function ProfileScreen() {
 
       <DailyStreakModal visible={streakOpen} onClose={() => setStreakOpen(false)} />
       <ThemeStudioModal visible={themeOpen} onClose={() => setThemeOpen(false)} />
+      <WalletModal visible={walletOpen} onClose={() => setWalletOpen(false)} />
 
       <DevVaultModal
         visible={devVaultOpen}

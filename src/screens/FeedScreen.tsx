@@ -29,6 +29,9 @@ import DailyStreakModal from "../components/DailyStreakModal";
 import ShahinazAiModal from "../components/ShahinazAiModal";
 import ThemeStudioModal from "../components/ThemeStudioModal";
 import AuroraBackground from "../components/AuroraBackground";
+import LiveStreamModal from "../components/LiveStreamModal";
+import WalletModal from "../components/WalletModal";
+import { PulseDot } from "../components/LuxuryMotion";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const CARD_MEDIA_HEIGHT = Math.min(390, (SCREEN_WIDTH - 44) * 1.05);
@@ -161,6 +164,8 @@ export default function FeedScreen() {
   const [streakOpen, setStreakOpen] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
   const [themeOpen, setThemeOpen] = useState(false);
+  const [liveOpen, setLiveOpen] = useState(false);
+  const [walletOpen, setWalletOpen] = useState(false);
   const [devVaultOpen, setDevVaultOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
   const [selectedAuthorId, setSelectedAuthorId] = useState<string | null>(null);
@@ -308,7 +313,7 @@ export default function FeedScreen() {
                 <View style={{ alignItems: "flex-end" }}>
                   <Text style={[styles.brand, { color: theme.text }]}>SHAHINAZ</Text>
                   <Text style={{ color: theme.primary, fontSize: 9, fontWeight: "900", letterSpacing: 1.5, marginTop: -2 }}>
-                    OBSIDIAN 4.0
+                    ROYAL 5.0
                   </Text>
                 </View>
               </TouchableOpacity>
@@ -337,9 +342,9 @@ export default function FeedScreen() {
 
                 <TouchableOpacity
                   style={[styles.glassIconBtn, { backgroundColor: theme.surface, borderColor: theme.border }]}
-                  onPress={() => setAiOpen(true)}
+                  onPress={() => setWalletOpen(true)}
                 >
-                  <Ionicons name="sparkles-outline" size={18} color={theme.primary} />
+                  <Ionicons name="card-outline" size={18} color={theme.primary} />
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -376,12 +381,44 @@ export default function FeedScreen() {
               </LinearGradient>
             )}
 
-            {/* Signature SHAHINAZ Tall Squircle Portrait Story Cards */}
+            {/* Signature SHAHINAZ Tall Squircle Portrait Story Cards + LIVE Card */}
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.storiesRow}
             >
+              {/* SHAHINAZ LIVE Broadcast Card */}
+              <TouchableOpacity activeOpacity={0.88} onPress={() => setLiveOpen(true)}>
+                <LinearGradient
+                  colors={["#EF4444", "#F97316", "#F59E0B"]}
+                  start={{ x: 0, y: 1 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.storyCardFrame}
+                >
+                  <View style={[styles.storyCardInner, { backgroundColor: "#14070B" }]}>
+                    <LinearGradient colors={["rgba(239,68,68,0.45)", "rgba(5,6,11,0.9)"]} style={StyleSheet.absoluteFillObject} />
+                    <View
+                      style={{
+                        position: "absolute",
+                        top: 7,
+                        flexDirection: "row-reverse",
+                        alignItems: "center",
+                        gap: 4,
+                        backgroundColor: "rgba(220,38,38,0.92)",
+                        paddingHorizontal: 7,
+                        paddingVertical: 2.5,
+                        borderRadius: 999,
+                      }}
+                    >
+                      <PulseDot color="#fff" size={6} />
+                      <Text style={{ color: "#fff", fontSize: 9, fontWeight: "900" }}>LIVE</Text>
+                    </View>
+                    <Ionicons name="videocam" size={24} color="#FCA5A5" style={{ marginBottom: 4 }} />
+                    <Text style={styles.storyCardLabel}>بث مباشر</Text>
+                  </View>
+                </LinearGradient>
+              </TouchableOpacity>
+
               {/* Add My Story Luxury Card */}
               <TouchableOpacity
                 activeOpacity={0.88}
@@ -444,6 +481,47 @@ export default function FeedScreen() {
                   </LinearGradient>
                 </TouchableOpacity>
               ))}
+            </ScrollView>
+
+            {/* Quick Luxury Feature Strip */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal: 14, gap: 8, paddingTop: 4, paddingBottom: 4 }}
+            >
+              <TouchableOpacity
+                style={[styles.quickHubPill, { backgroundColor: "rgba(239,68,68,0.14)", borderColor: "rgba(239,68,68,0.45)" }]}
+                onPress={() => setLiveOpen(true)}
+              >
+                <PulseDot color="#EF4444" size={7} />
+                <Text style={{ color: "#FCA5A5", fontSize: 11.5, fontWeight: "900" }}>بث مباشر</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.quickHubPill, { backgroundColor: theme.surface, borderColor: theme.borderGlow }]}
+                onPress={() => setWalletOpen(true)}
+              >
+                <Ionicons name="card-outline" size={14} color={theme.primary} />
+                <Text style={{ color: theme.text, fontSize: 11.5, fontWeight: "800" }}>
+                  محفظتي ({currentUser?.points ?? 150} 🪙)
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.quickHubPill, { backgroundColor: theme.surface, borderColor: theme.border }]}
+                onPress={() => setAiOpen(true)}
+              >
+                <Ionicons name="sparkles" size={13} color={theme.primary} />
+                <Text style={{ color: theme.text, fontSize: 11.5, fontWeight: "800" }}>استوديو AI</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.quickHubPill, { backgroundColor: theme.surface, borderColor: theme.border }]}
+                onPress={() => setThemeOpen(true)}
+              >
+                <Ionicons name="color-palette" size={14} color={theme.primary} />
+                <Text style={{ color: theme.text, fontSize: 11.5, fontWeight: "800" }}>6 ثيمات ملكية</Text>
+              </TouchableOpacity>
             </ScrollView>
 
             {/* Floating Frosted Segmented Feed Switcher */}
@@ -1089,7 +1167,7 @@ export default function FeedScreen() {
 
               {/* Stealth 5-Tap Developer Entry Footer */}
               <TouchableOpacity activeOpacity={0.7} onPress={handleSecretVersionTap} style={styles.versionFooter}>
-                <Text style={[styles.versionText, { color: theme.muted }]}>SHAHINAZ Ultra 4.0 · Obsidian Couture</Text>
+                <Text style={[styles.versionText, { color: theme.muted }]}>SHAHINAZ Ultra 5.0 · Royal Platinum</Text>
               </TouchableOpacity>
             </ScrollView>
           </View>
@@ -1099,6 +1177,8 @@ export default function FeedScreen() {
       <DailyStreakModal visible={streakOpen} onClose={() => setStreakOpen(false)} />
       <ShahinazAiModal visible={aiOpen} onClose={() => setAiOpen(false)} />
       <ThemeStudioModal visible={themeOpen} onClose={() => setThemeOpen(false)} />
+      <LiveStreamModal visible={liveOpen} onClose={() => setLiveOpen(false)} />
+      <WalletModal visible={walletOpen} onClose={() => setWalletOpen(false)} />
 
       <DevVaultModal
         visible={devVaultOpen}
@@ -1499,4 +1579,13 @@ const styles = StyleSheet.create({
   },
   versionFooter: { alignItems: "center", paddingTop: 12, paddingBottom: 4 },
   versionText: { fontSize: 11.5, letterSpacing: 0.5 },
+  quickHubPill: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 13,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
 });

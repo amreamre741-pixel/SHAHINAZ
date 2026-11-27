@@ -12,7 +12,7 @@ export default function ThemeStudioModal({ visible, onClose }: { visible: boolea
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.backdrop}>
         <View style={[styles.sheet, { backgroundColor: theme.bgAlt, borderColor: theme.borderGlow }]}>
-          <View style={styles.handle} />
+          <View style={[styles.handle, { backgroundColor: theme.muted, opacity: 0.35 }]} />
 
           <View style={styles.header}>
             <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10 }}>

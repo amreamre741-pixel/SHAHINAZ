@@ -9,6 +9,7 @@ import { devTelemetry } from "./src/services/devTelemetry";
 import AppErrorBoundary from "./src/components/AppErrorBoundary";
 import DevHudOverlay from "./src/components/DevHudOverlay";
 import UpdateBanner from "./src/components/UpdateBanner";
+import { AnimatedSplashGate } from "./src/components/LuxuryMotion";
 import AdminScreen from "./src/screens/AdminScreen";
 import AuthScreen from "./src/screens/AuthScreen";
 import FeedScreen from "./src/screens/FeedScreen";
@@ -32,7 +33,7 @@ function MainApp() {
   if (!currentUser) {
     return (
       <SafeAreaView style={[styles.root, { backgroundColor: theme.bg }]} edges={["top", "bottom"]}>
-        <StatusBar style="light" backgroundColor={theme.bg} translucent={false} />
+        <StatusBar style={theme.statusBarStyle} backgroundColor={theme.bg} translucent={false} />
         <DevHudOverlay
           visible={devHudEnabled}
           onOpenAdmin={() => setHudAdminOpen(true)}
@@ -40,6 +41,7 @@ function MainApp() {
         />
         <UpdateBanner />
         <AuthScreen />
+        <AnimatedSplashGate theme={theme} />
         <Modal visible={hudAdminOpen} animationType="slide" onRequestClose={() => setHudAdminOpen(false)}>
           <AdminScreen onClose={() => setHudAdminOpen(false)} />
         </Modal>
@@ -49,13 +51,14 @@ function MainApp() {
 
   return (
     <SafeAreaView style={[styles.root, { backgroundColor: theme.bg }]} edges={["top", "bottom"]}>
-      <StatusBar style="light" backgroundColor={theme.bg} translucent={false} />
+      <StatusBar style={theme.statusBarStyle} backgroundColor={theme.bg} translucent={false} />
       <DevHudOverlay
         visible={devHudEnabled}
         onOpenAdmin={() => setHudAdminOpen(true)}
         onHideHud={adminToggleDevHud}
       />
       <UpdateBanner />
+      <AnimatedSplashGate theme={theme} />
 
       <View style={styles.body}>
         {tab === "feed" && <FeedScreen />}

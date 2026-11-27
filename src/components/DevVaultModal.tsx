@@ -110,7 +110,7 @@ export default function DevVaultModal({
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.backdrop}>
-        <LinearGradient colors={["#0f0720", "#050507", "#000000"]} style={styles.vaultCard}>
+        <LinearGradient colors={["#1A1408", "#0A0C14", "#05060B"]} style={styles.vaultCard}>
           {/* Top Bar */}
           <View style={styles.topRow}>
             <View style={styles.secureBadge}>
@@ -124,9 +124,9 @@ export default function DevVaultModal({
 
           {/* Shield Emblem */}
           <View style={styles.hero}>
-            <LinearGradient colors={["#a855f7", "#ec4899", "#3897f0"]} style={styles.shieldRing}>
+            <LinearGradient colors={["#FDE68A", "#F59E0B", "#B45309"]} style={styles.shieldRing}>
               <View style={styles.shieldInner}>
-                <Ionicons name="shield-checkmark" size={32} color="#fff" />
+                <Ionicons name="shield-checkmark" size={32} color="#FDE68A" />
               </View>
             </LinearGradient>
             <Text style={styles.title}>بوابة المطور المشفّرة</Text>
