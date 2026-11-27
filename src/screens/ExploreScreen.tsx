@@ -71,9 +71,13 @@ const LEADERBOARD = [
 
 export default function ExploreScreen() {
   const {
+    currentUser,
     posts,
     marketItems,
     audioRooms,
+    marketEnabled,
+    audioRoomsEnabled,
+    rolePermissions,
     addMarketItem,
     createAudioRoom,
     placeCodOrder,
@@ -329,79 +333,125 @@ export default function ExploreScreen() {
       {/* LIVE AUDIO ROOMS (غرف القعدة الصوتية) */}
       {mode === "rooms" && (
         <View style={{ flex: 1, paddingHorizontal: 12 }}>
-          <TouchableOpacity style={styles.sellBtn} onPress={() => setNewRoomOpen(true)}>
-            <Ionicons name="mic" size={18} color="#fff" />
-            <Text style={{ color: "#fff", fontWeight: "700", fontSize: 13 }}>+ افتح غرفة صوتية مباشرة الآن</Text>
-          </TouchableOpacity>
-
-          <FlatList
-            data={audioRooms}
-            keyExtractor={(r) => r.id}
-            contentContainerStyle={{ gap: 12, paddingBottom: 20 }}
-            renderItem={({ item }) => (
+          {!audioRoomsEnabled ? (
+            <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 10, paddingHorizontal: 24 }}>
+              <Ionicons name="mic-off-outline" size={44} color={COLORS.muted} />
+              <Text style={{ color: COLORS.text, fontSize: 16, fontWeight: "800", textAlign: "center" }}>
+                الغرف الصوتية متوقفة مؤقتاً
+              </Text>
+              <Text style={{ color: COLORS.muted, fontSize: 12.5, textAlign: "center" }}>
+                تم إيقاف قسم القعدات الصوتية مؤقتاً من طرف إدارة SHAHINAZ.
+              </Text>
+            </View>
+          ) : (
+            <>
               <TouchableOpacity
-                style={styles.roomCard}
-                activeOpacity={0.85}
+                style={styles.sellBtn}
                 onPress={() => {
-                  setMicOn(false);
-                  setHandRaised(false);
-                  setActiveRoom(item);
+                  const role = currentUser?.role || "USER";
+                  if (!rolePermissions[role]?.canCreateAudioRoom) {
+                    Alert.alert("الصلاحيات", "فتح الغرف الصوتية غير مفعّل لرتبتك الحالية من طرف الإدارة.");
+                    return;
+                  }
+                  setNewRoomOpen(true);
                 }}
               >
-                <View style={{ flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center" }}>
-                  <View style={styles.liveBadge}>
-                    <View style={styles.liveDot} />
-                    <Text style={{ color: "#fff", fontSize: 10, fontWeight: "800" }}>مباشر · {item.listeners} مستمع</Text>
-                  </View>
-                  <Text style={{ color: COLORS.primary, fontSize: 11, fontWeight: "700" }}>{item.topic}</Text>
-                </View>
-                <Text style={styles.roomTitle}>{item.title}</Text>
-                <View style={{ flexDirection: "row-reverse", alignItems: "center", justifyContent: "space-between", marginTop: 10 }}>
-                  <View style={{ flexDirection: "row-reverse", gap: 8 }}>
-                    {item.speakers.map((sp, idx) => (
-                      <View key={idx} style={{ alignItems: "center" }}>
-                        {sp.avatarUri ? (
-                          <Image
-                            source={{ uri: sp.avatarUri }}
-                            style={[styles.speakerSmall, sp.speaking && { borderColor: COLORS.success, borderWidth: 2 }]}
-                          />
-                        ) : (
-                          <View style={styles.speakerSmallFallback}>
-                            <Ionicons name="person" size={16} color={COLORS.muted} />
-                          </View>
-                        )}
-                      </View>
-                    ))}
-                  </View>
-                  <Text style={{ color: COLORS.verified, fontWeight: "700", fontSize: 12 }}>دخول للاستماع ←</Text>
-                </View>
+                <Ionicons name="mic" size={18} color="#fff" />
+                <Text style={{ color: "#fff", fontWeight: "700", fontSize: 13 }}>+ افتح غرفة صوتية مباشرة الآن</Text>
               </TouchableOpacity>
-            )}
-          />
+
+              <FlatList
+                data={audioRooms}
+                keyExtractor={(r) => r.id}
+                contentContainerStyle={{ gap: 12, paddingBottom: 20 }}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.roomCard}
+                    activeOpacity={0.85}
+                    onPress={() => {
+                      setMicOn(false);
+                      setHandRaised(false);
+                      setActiveRoom(item);
+                    }}
+                  >
+                    <View style={{ flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center" }}>
+                      <View style={styles.liveBadge}>
+                        <View style={styles.liveDot} />
+                        <Text style={{ color: "#fff", fontSize: 10, fontWeight: "800" }}>مباشر · {item.listeners} مستمع</Text>
+                      </View>
+                      <Text style={{ color: COLORS.primary, fontSize: 11, fontWeight: "700" }}>{item.topic}</Text>
+                    </View>
+                    <Text style={styles.roomTitle}>{item.title}</Text>
+                    <View style={{ flexDirection: "row-reverse", alignItems: "center", justifyContent: "space-between", marginTop: 10 }}>
+                      <View style={{ flexDirection: "row-reverse", gap: 8 }}>
+                        {item.speakers.map((sp, idx) => (
+                          <View key={idx} style={{ alignItems: "center" }}>
+                            {sp.avatarUri ? (
+                              <Image
+                                source={{ uri: sp.avatarUri }}
+                                style={[styles.speakerSmall, sp.speaking && { borderColor: COLORS.success, borderWidth: 2 }]}
+                              />
+                            ) : (
+                              <View style={styles.speakerSmallFallback}>
+                                <Ionicons name="person" size={16} color={COLORS.muted} />
+                              </View>
+                            )}
+                          </View>
+                        ))}
+                      </View>
+                      <Text style={{ color: COLORS.verified, fontWeight: "700", fontSize: 12 }}>دخول للاستماع ←</Text>
+                    </View>
+                  </TouchableOpacity>
+                )}
+              />
+            </>
+          )}
         </View>
       )}
 
       {/* MARKETPLACE */}
       {mode === "market" && (
         <View style={{ flex: 1, paddingHorizontal: 12 }}>
-          <TouchableOpacity style={styles.sellBtn} onPress={() => setAddingProduct((v) => !v)}>
-            <Ionicons name={addingProduct ? "close" : "add-circle-outline"} size={18} color="#fff" />
-            <Text style={{ color: "#fff", fontWeight: "700", fontSize: 13 }}>
-              {addingProduct ? "إغلاق" : "اعرض منتجك للبيع مجاناً"}
-            </Text>
-          </TouchableOpacity>
-
-          {addingProduct && (
-            <View style={styles.formCard}>
-              <TextInput style={styles.input} placeholder="اسم المنتج" placeholderTextColor={COLORS.muted} value={pTitle} onChangeText={setPTitle} />
-              <TextInput style={styles.input} placeholder="السعر (دج)" placeholderTextColor={COLORS.muted} keyboardType="number-pad" value={pPrice} onChangeText={setPPrice} />
-              <TextInput style={styles.input} placeholder="الولاية (مثال: سطيف)" placeholderTextColor={COLORS.muted} value={pCity} onChangeText={setPCity} />
-              <TextInput style={styles.input} placeholder="رقم الهاتف (لواتساب)" placeholderTextColor={COLORS.muted} keyboardType="phone-pad" value={pPhone} onChangeText={setPPhone} />
-              <TouchableOpacity style={styles.sellBtn} onPress={handleAddProduct}>
-                <Text style={{ color: "#fff", fontWeight: "700" }}>نشر المنتج الآن</Text>
-              </TouchableOpacity>
+          {!marketEnabled ? (
+            <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 10, paddingHorizontal: 24 }}>
+              <Ionicons name="storefront-outline" size={44} color={COLORS.muted} />
+              <Text style={{ color: COLORS.text, fontSize: 16, fontWeight: "800", textAlign: "center" }}>
+                السوق متوقف مؤقتاً
+              </Text>
+              <Text style={{ color: COLORS.muted, fontSize: 12.5, textAlign: "center" }}>
+                تم إيقاف قسم البيع والشراء مؤقتاً من طرف إدارة SHAHINAZ.
+              </Text>
             </View>
-          )}
+          ) : (
+            <>
+              <TouchableOpacity
+                style={styles.sellBtn}
+                onPress={() => {
+                  const role = currentUser?.role || "USER";
+                  if (!addingProduct && !rolePermissions[role]?.canSellMarket) {
+                    Alert.alert("الصلاحيات", "عرض المنتجات في السوق غير مفعّل لرتبتك الحالية من طرف الإدارة.");
+                    return;
+                  }
+                  setAddingProduct((v) => !v);
+                }}
+              >
+                <Ionicons name={addingProduct ? "close" : "add-circle-outline"} size={18} color="#fff" />
+                <Text style={{ color: "#fff", fontWeight: "700", fontSize: 13 }}>
+                  {addingProduct ? "إغلاق" : "اعرض منتجك للبيع مجاناً"}
+                </Text>
+              </TouchableOpacity>
+
+              {addingProduct && (
+                <View style={styles.formCard}>
+                  <TextInput style={styles.input} placeholder="اسم المنتج" placeholderTextColor={COLORS.muted} value={pTitle} onChangeText={setPTitle} />
+                  <TextInput style={styles.input} placeholder="السعر (دج)" placeholderTextColor={COLORS.muted} keyboardType="number-pad" value={pPrice} onChangeText={setPPrice} />
+                  <TextInput style={styles.input} placeholder="الولاية (مثال: سطيف)" placeholderTextColor={COLORS.muted} value={pCity} onChangeText={setPCity} />
+                  <TextInput style={styles.input} placeholder="رقم الهاتف (لواتساب)" placeholderTextColor={COLORS.muted} keyboardType="phone-pad" value={pPhone} onChangeText={setPPhone} />
+                  <TouchableOpacity style={styles.sellBtn} onPress={handleAddProduct}>
+                    <Text style={{ color: "#fff", fontWeight: "700" }}>نشر المنتج الآن</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
 
           <FlatList
             data={filteredMarket}
@@ -437,6 +487,8 @@ export default function ExploreScreen() {
               </View>
             )}
           />
+            </>
+          )}
         </View>
       )}
 

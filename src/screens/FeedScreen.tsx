@@ -10,6 +10,7 @@ import {
   ScrollView,
   Share,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -22,6 +23,8 @@ import { LinearGradient } from "expo-linear-gradient";
 import { COLORS } from "../theme";
 import { useApp } from "../store/AppContext";
 import type { Post, Story } from "../types";
+import AdminScreen from "./AdminScreen";
+import DevVaultModal from "../components/DevVaultModal";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -78,9 +81,14 @@ export default function FeedScreen() {
   const {
     currentUser,
     posts,
+    allUsers,
     stories,
     notifications,
     announcement,
+    adminPin,
+    bannedWords,
+    rolePermissions,
+    blockedUserIds,
     toggleLike,
     toggleSave,
     addComment,
@@ -91,6 +99,10 @@ export default function FeedScreen() {
     refreshPosts,
     reportPost,
     blockUser,
+    unblockUser,
+    togglePrivateAccount,
+    logout,
+    deleteAccount,
   } = useApp();
 
   const [refreshing, setRefreshing] = useState(false);
@@ -101,7 +113,12 @@ export default function FeedScreen() {
   const [storyText, setStoryText] = useState("");
   const [storyImg, setStoryImg] = useState<string | undefined>(undefined);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [devVaultOpen, setDevVaultOpen] = useState(false);
+  const [adminOpen, setAdminOpen] = useState(false);
 
+  const versionTapCountRef = useRef(0);
+  const versionTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const storyProgress = useRef(new Animated.Value(0)).current;
   const unreadNotifs = notifications.filter((n) => !n.read).length;
 
@@ -118,6 +135,56 @@ export default function FeedScreen() {
     });
     return () => anim.stop();
   }, [activeStory]);
+
+  function handleSecretVersionTap() {
+    versionTapCountRef.current += 1;
+    if (versionTapTimerRef.current) clearTimeout(versionTapTimerRef.current);
+    if (versionTapCountRef.current >= 5) {
+      versionTapCountRef.current = 0;
+      setSettingsOpen(false);
+      setTimeout(() => setDevVaultOpen(true), 220);
+      return;
+    }
+    versionTapTimerRef.current = setTimeout(() => {
+      versionTapCountRef.current = 0;
+    }, 2500);
+  }
+
+  function confirmDeleteFromSettings() {
+    Alert.alert(
+      "حذف الحساب نهائياً",
+      "هل أنت متأكد؟ سيتم حذف حسابك وجميع منشوراتك وبياناتك بشكل نهائي ولا يمكن التراجع عن ذلك.",
+      [
+        { text: "إلغاء", style: "cancel" },
+        {
+          text: "نعم، احذف حسابي",
+          style: "destructive",
+          onPress: () => {
+            setSettingsOpen(false);
+            deleteAccount();
+            Alert.alert("تم الحذف", "تم حذف حسابك وبياناتك بنجاح.");
+          },
+        },
+      ]
+    );
+  }
+
+  function handleSendComment(postId: string) {
+    const clean = commentText.trim();
+    if (!clean) return;
+    const role = currentUser?.role || "USER";
+    if (!rolePermissions[role]?.canComment) {
+      Alert.alert("الصلاحيات", "التعليق غير مفعّل لرتبتك الحالية من طرف الإدارة.");
+      return;
+    }
+    const foundBanned = bannedWords.find((w) => clean.toLowerCase().includes(w.toLowerCase()));
+    if (foundBanned) {
+      Alert.alert("محتوى غير مسموح", "يحتوي تعليقك على كلمة محظورة من فلتر الأمان التلقائي.");
+      return;
+    }
+    addComment(postId, clean);
+    setCommentText("");
+  }
 
   async function onRefresh() {
     setRefreshing(true);
@@ -166,16 +233,30 @@ export default function FeedScreen() {
           <View>
             {/* Ultra-clean Instagram-grade Top Header */}
             <View style={styles.header}>
-              <Text style={styles.brand}>SHAHINAZ</Text>
+              <TouchableOpacity
+                activeOpacity={0.9}
+                delayLongPress={1400}
+                onLongPress={() => setDevVaultOpen(true)}
+              >
+                <Text style={styles.brand}>SHAHINAZ</Text>
+              </TouchableOpacity>
               <View style={styles.headerRight}>
+                <TouchableOpacity
+                  style={styles.iconBtn}
+                  onPress={() => setSettingsOpen(true)}
+                  accessibilityLabel="الإعدادات"
+                >
+                  <Ionicons name="settings-outline" size={23} color={COLORS.text} />
+                </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.iconBtn}
                   onPress={() => {
                     setNotifOpen(true);
                     markAllNotificationsRead();
                   }}
+                  accessibilityLabel="الإشعارات"
                 >
-                  <Ionicons name="heart-outline" size={25} color={COLORS.text} />
+                  <Ionicons name="notifications-outline" size={24} color={COLORS.text} />
                   {unreadNotifs > 0 && <View style={styles.redDot} />}
                 </TouchableOpacity>
               </View>
@@ -263,6 +344,11 @@ export default function FeedScreen() {
                   <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 4 }}>
                     <Text style={styles.authorName}>{item.author.name}</Text>
                     {item.author.verified && <Ionicons name="checkmark-circle" size={14} color={COLORS.verified} />}
+                    {item.isPinned && (
+                      <View style={styles.pinnedPill}>
+                        <Text style={styles.pinnedPillText}>📌 مثبّت</Text>
+                      </View>
+                    )}
                   </View>
                   <Text style={styles.postSub}>
                     {item.location ? `${item.location} · ` : ""}
@@ -388,12 +474,7 @@ export default function FeedScreen() {
                       value={commentText}
                       onChangeText={setCommentText}
                     />
-                    <TouchableOpacity
-                      onPress={() => {
-                        addComment(item.id, commentText);
-                        setCommentText("");
-                      }}
-                    >
+                    <TouchableOpacity onPress={() => handleSendComment(item.id)}>
                       <Text style={{ color: COLORS.verified, fontWeight: "700", fontSize: 13 }}>نشر</Text>
                     </TouchableOpacity>
                   </View>
@@ -500,21 +581,144 @@ export default function FeedScreen() {
       <Modal visible={notifOpen} transparent animationType="slide" onRequestClose={() => setNotifOpen(false)}>
         <View style={styles.modalBackdrop}>
           <View style={styles.modalBox}>
-            <Text style={styles.modalTitle}>النشاط والإشعارات</Text>
-            {notifications.map((n) => (
-              <View key={n.id} style={styles.notifRow}>
-                <Text style={{ fontSize: 18 }}>{n.emoji}</Text>
-                <View style={{ flex: 1, alignItems: "flex-end" }}>
-                  <Text style={{ color: COLORS.text, fontSize: 13 }}>{n.text}</Text>
-                  <Text style={{ color: COLORS.muted, fontSize: 11 }}>{n.time}</Text>
+            <Text style={styles.modalTitle}>🔔 النشاط والإشعارات</Text>
+            <ScrollView style={{ maxHeight: 340 }} showsVerticalScrollIndicator={false}>
+              {notifications.map((n) => (
+                <View key={n.id} style={styles.notifRow}>
+                  <Text style={{ fontSize: 18 }}>{n.emoji}</Text>
+                  <View style={{ flex: 1, alignItems: "flex-end" }}>
+                    <Text style={{ color: COLORS.text, fontSize: 13, textAlign: "right" }}>{n.text}</Text>
+                    <Text style={{ color: COLORS.muted, fontSize: 11 }}>{n.time}</Text>
+                  </View>
                 </View>
-              </View>
-            ))}
-            <TouchableOpacity style={[styles.primaryBtn, { marginTop: 14 }]} onPress={() => setNotifOpen(false)}>
+              ))}
+            </ScrollView>
+            <TouchableOpacity style={[styles.primaryBtn, { flex: 0, marginTop: 14 }]} onPress={() => setNotifOpen(false)}>
               <Text style={{ color: "#fff", fontWeight: "700" }}>إغلاق</Text>
             </TouchableOpacity>
           </View>
         </View>
+      </Modal>
+
+      {/* AMOLED Quick Settings Sheet (Opened from ⚙️ next to Notifications Bell) */}
+      <Modal visible={settingsOpen} transparent animationType="slide" onRequestClose={() => setSettingsOpen(false)}>
+        <View style={styles.sheetBackdrop}>
+          <View style={styles.settingsSheet}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.settingsHeader}>
+              <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 8 }}>
+                <Ionicons name="settings-outline" size={20} color={COLORS.primary} />
+                <Text style={styles.settingsTitle}>الإعدادات والخصوصية</Text>
+              </View>
+              <TouchableOpacity onPress={() => setSettingsOpen(false)} style={styles.sheetCloseBtn}>
+                <Ionicons name="close" size={20} color={COLORS.text} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingBottom: 14 }}>
+              {/* User Mini Card */}
+              {currentUser && (
+                <View style={styles.accountMiniCard}>
+                  {currentUser.avatarUri ? (
+                    <Image source={{ uri: currentUser.avatarUri }} style={styles.miniAvatar} />
+                  ) : (
+                    <View style={styles.miniAvatarFallback}>
+                      <Ionicons name="person" size={22} color={COLORS.muted} />
+                    </View>
+                  )}
+                  <View style={{ flex: 1, alignItems: "flex-end" }}>
+                    <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 5 }}>
+                      <Text style={{ color: COLORS.text, fontWeight: "800", fontSize: 15 }}>{currentUser.name}</Text>
+                      {currentUser.verified && <Ionicons name="checkmark-circle" size={15} color={COLORS.verified} />}
+                    </View>
+                    <Text style={{ color: COLORS.muted, fontSize: 12 }}>
+                      @{currentUser.username} · 🏆 {currentUser.points ?? 150} نقطة
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              {/* Private Account Toggle */}
+              <View style={styles.settingRow}>
+                <Switch value={!!currentUser?.isPrivate} onValueChange={togglePrivateAccount} />
+                <View style={{ flex: 1, alignItems: "flex-end", paddingLeft: 10 }}>
+                  <Text style={styles.settingTitle}>حساب خاص (Private)</Text>
+                  <Text style={styles.settingSub}>فقط المتابعون الموافق عليهم يشاهدون منشوراتك</Text>
+                </View>
+              </View>
+
+              {/* App Theme & Connection Status */}
+              <View style={styles.settingRow}>
+                <View style={styles.onlinePill}>
+                  <View style={styles.onlineDot} />
+                  <Text style={{ color: COLORS.success, fontSize: 11, fontWeight: "700" }}>متصل</Text>
+                </View>
+                <View style={{ flex: 1, alignItems: "flex-end" }}>
+                  <Text style={styles.settingTitle}>المظهر الليلي AMOLED</Text>
+                  <Text style={styles.settingSub}>أسود فاحم موفّر للبطارية · جودة عالية</Text>
+                </View>
+              </View>
+
+              {/* Blocked Users */}
+              <View style={styles.settingBlockCard}>
+                <View style={{ flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center" }}>
+                  <Text style={styles.settingTitle}>المستخدمون المحظورون</Text>
+                  <Text style={{ color: COLORS.muted, fontWeight: "700", fontSize: 13 }}>{blockedUserIds.length}</Text>
+                </View>
+                {blockedUserIds.length > 0 && (
+                  <View style={{ marginTop: 8, gap: 6 }}>
+                    {blockedUserIds.map((uid) => {
+                      const u = allUsers.find((x) => x.id === uid);
+                      return (
+                        <View key={uid} style={styles.blockedItem}>
+                          <TouchableOpacity onPress={() => unblockUser(uid)}>
+                            <Text style={{ color: COLORS.verified, fontSize: 12, fontWeight: "700" }}>إلغاء الحظر</Text>
+                          </TouchableOpacity>
+                          <Text style={{ color: COLORS.text, fontSize: 12.5 }}>{u ? u.name : uid}</Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
+              </View>
+
+              {/* Logout & Delete Account */}
+              <TouchableOpacity
+                style={styles.logoutBtn}
+                onPress={() => {
+                  setSettingsOpen(false);
+                  logout();
+                }}
+              >
+                <Ionicons name="log-out-outline" size={18} color={COLORS.text} />
+                <Text style={{ color: COLORS.text, fontWeight: "700", fontSize: 14 }}>تسجيل الخروج</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.dangerBtn} onPress={confirmDeleteFromSettings}>
+                <Ionicons name="trash-outline" size={18} color={COLORS.danger} />
+                <Text style={{ color: COLORS.danger, fontWeight: "700", fontSize: 14 }}>حذف الحساب نهائياً</Text>
+              </TouchableOpacity>
+
+              {/* Stealth 5-Tap Developer Entry Footer (100% invisible to normal users) */}
+              <TouchableOpacity activeOpacity={0.7} onPress={handleSecretVersionTap} style={styles.versionFooter}>
+                <Text style={styles.versionText}>SHAHINAZ Ultra · v1.0.0</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Encrypted Developer Vault PIN Keypad */}
+      <DevVaultModal
+        visible={devVaultOpen}
+        expectedPin={adminPin}
+        onClose={() => setDevVaultOpen(false)}
+        onUnlock={() => setAdminOpen(true)}
+      />
+
+      {/* Full-Screen Super-Admin Command Center */}
+      <Modal visible={adminOpen} animationType="slide" onRequestClose={() => setAdminOpen(false)}>
+        <AdminScreen onClose={() => setAdminOpen(false)} />
       </Modal>
     </View>
   );
@@ -530,8 +734,8 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   brand: { fontSize: 23, fontWeight: "900", color: COLORS.text, letterSpacing: 1.8 },
-  headerRight: { flexDirection: "row", alignItems: "center", gap: 12 },
-  iconBtn: { position: "relative", padding: 4 },
+  headerRight: { flexDirection: "row", alignItems: "center", gap: 10 },
+  iconBtn: { position: "relative", padding: 5 },
   redDot: {
     position: "absolute",
     top: 4,
@@ -615,6 +819,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   authorName: { color: COLORS.text, fontWeight: "700", fontSize: 13.5 },
+  pinnedPill: {
+    backgroundColor: "rgba(56,151,240,0.16)",
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 6,
+  },
+  pinnedPillText: { color: COLORS.verified, fontSize: 10, fontWeight: "800" },
   postSub: { color: COLORS.muted, fontSize: 11, marginTop: 1 },
   moreBtn: { padding: 6 },
   mediaWrap: { position: "relative", width: SCREEN_WIDTH, height: SCREEN_WIDTH * 1.1, backgroundColor: COLORS.surface },
@@ -715,5 +926,130 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderBottomWidth: 0.5,
     borderBottomColor: COLORS.border,
+  },
+  sheetBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.78)",
+    justifyContent: "flex-end",
+  },
+  settingsSheet: {
+    backgroundColor: "#0c0c0f",
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
+    paddingHorizontal: 18,
+    paddingTop: 10,
+    paddingBottom: 24,
+    maxHeight: "82%",
+    borderTopWidth: 1,
+    borderColor: COLORS.border,
+  },
+  sheetHandle: {
+    width: 42,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "rgba(255,255,255,0.22)",
+    alignSelf: "center",
+    marginBottom: 12,
+  },
+  settingsHeader: {
+    flexDirection: "row-reverse",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 14,
+  },
+  settingsTitle: { color: COLORS.text, fontSize: 17, fontWeight: "800" },
+  sheetCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: COLORS.surface2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  accountMiniCard: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: COLORS.surface,
+    padding: 12,
+    borderRadius: 14,
+    borderWidth: 0.5,
+    borderColor: COLORS.border,
+  },
+  miniAvatar: { width: 44, height: 44, borderRadius: 22 },
+  miniAvatarFallback: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: COLORS.surface2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  settingRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: COLORS.surface,
+    padding: 13,
+    borderRadius: 14,
+    borderWidth: 0.5,
+    borderColor: COLORS.border,
+  },
+  settingBlockCard: {
+    backgroundColor: COLORS.surface,
+    padding: 13,
+    borderRadius: 14,
+    borderWidth: 0.5,
+    borderColor: COLORS.border,
+  },
+  settingTitle: { color: COLORS.text, fontSize: 13.5, fontWeight: "700" },
+  settingSub: { color: COLORS.muted, fontSize: 11, marginTop: 2 },
+  onlinePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "rgba(34,197,94,0.14)",
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  onlineDot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: COLORS.success },
+  blockedItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 6,
+    borderTopWidth: 0.5,
+    borderTopColor: COLORS.border,
+  },
+  logoutBtn: {
+    flexDirection: "row-reverse",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: COLORS.surface2,
+    borderRadius: 13,
+    padding: 13,
+  },
+  dangerBtn: {
+    flexDirection: "row-reverse",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "rgba(239,68,68,0.12)",
+    borderColor: COLORS.danger,
+    borderWidth: 0.8,
+    borderRadius: 13,
+    padding: 13,
+  },
+  versionFooter: {
+    alignItems: "center",
+    paddingTop: 12,
+    paddingBottom: 4,
+  },
+  versionText: {
+    color: COLORS.muted,
+    fontSize: 11.5,
+    letterSpacing: 0.4,
   },
 });

@@ -18,7 +18,7 @@ const AI_TEMPLATES = {
 };
 
 export default function CreatePostScreen({ onDone }: { onDone: () => void }) {
-  const { createPost } = useApp();
+  const { currentUser, createPost, maintenanceMode, bannedWords, rolePermissions } = useApp();
   const [content, setContent] = useState("");
   const [location, setLocation] = useState("");
   const [imageUri, setImageUri] = useState<string | undefined>(undefined);
@@ -51,8 +51,22 @@ export default function CreatePostScreen({ onDone }: { onDone: () => void }) {
   }
 
   function handlePublish() {
+    if (maintenanceMode) {
+      Alert.alert("وضع الصيانة نشط ⚡", "النشر متوقف مؤقتاً من طرف الإدارة لإجراء تحديثات.");
+      return;
+    }
+    const role = currentUser?.role || "USER";
+    if (!rolePermissions[role]?.canPost) {
+      Alert.alert("الصلاحيات", "صلاحية النشر غير مفعّلة لرتبتك الحالية من طرف الإدارة.");
+      return;
+    }
     if (!content.trim() && !imageUri) {
       Alert.alert("تنبيه", "اكتب شيئاً أو اختر صورة للنشر.");
+      return;
+    }
+    const foundBanned = bannedWords.find((w) => content.toLowerCase().includes(w.toLowerCase()));
+    if (foundBanned) {
+      Alert.alert("فلتر الأمان التلقائي 🛡️", "يحتوي منشورك على كلمة محظورة من إدارة التطبيق. يرجى تعديل النص.");
       return;
     }
     createPost(content, imageUri, location, bgColor || undefined, showPoll ? [opt1, opt2, opt3] : undefined);
@@ -78,6 +92,14 @@ export default function CreatePostScreen({ onDone }: { onDone: () => void }) {
           </LinearGradient>
         </TouchableOpacity>
       </View>
+
+      {maintenanceMode && (
+        <View style={{ backgroundColor: "rgba(245,158,11,0.15)", borderColor: COLORS.warn, borderWidth: 0.5, borderRadius: 12, padding: 12, marginBottom: 12 }}>
+          <Text style={{ color: COLORS.warn, fontSize: 12.5, fontWeight: "700", textAlign: "right" }}>
+            ⚡ وضع الصيانة مُفعّل حالياً من طرف المطور — النشر متوقف مؤقتاً.
+          </Text>
+        </View>
+      )}
 
       {/* SHAHINAZ AI Smart Caption Assistant */}
       {showAI && (

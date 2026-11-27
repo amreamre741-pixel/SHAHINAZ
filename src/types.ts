@@ -1,3 +1,5 @@
+export type UserRole = "USER" | "VIP" | "MODERATOR" | "ADMIN";
+
 export interface User {
   id: string;
   name: string;
@@ -7,9 +9,25 @@ export interface User {
   avatarUri?: string;
   verified?: boolean;
   isPrivate?: boolean;
+  role?: UserRole;
   points?: number;
   followers: number;
   following: number;
+}
+
+export interface AdminLogItem {
+  id: string;
+  action: string;
+  time: string;
+}
+
+export interface RolePermissions {
+  canPost: boolean;
+  canComment: boolean;
+  canSellMarket: boolean;
+  canCreateAudioRoom: boolean;
+  canBoostPosts: boolean;
+  canModerateContent: boolean;
 }
 
 export interface Comment {
@@ -36,6 +54,7 @@ export interface Post {
   location?: string;
   bgColor?: string;
   isSponsored?: boolean;
+  isPinned?: boolean;
   myReaction?: ReactionEmoji | null;
   poll?: {
     options: PollOption[];

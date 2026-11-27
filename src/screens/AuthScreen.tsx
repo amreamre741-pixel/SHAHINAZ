@@ -4,7 +4,7 @@ import { COLORS } from "../theme";
 import { useApp } from "../store/AppContext";
 
 export default function AuthScreen() {
-  const { loginWithApi, registerWithApi } = useApp();
+  const { loginWithApi, registerWithApi, allowRegistration } = useApp();
   const [mode, setMode] = useState<"register" | "login">("register");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -13,6 +13,10 @@ export default function AuthScreen() {
   const [busy, setBusy] = useState(false);
 
   async function handleSubmit() {
+    if (mode === "register" && !allowRegistration) {
+      Alert.alert("التسجيل مغلق مؤقتاً", "تم إيقاف إنشاء الحسابات الجديدة مؤقتاً من طرف الإدارة.");
+      return;
+    }
     if (!email.trim() || !email.includes("@")) {
       Alert.alert("تنبيه", "يرجى إدخال بريد Gmail صحيح (مثال: name@gmail.com)");
       return;

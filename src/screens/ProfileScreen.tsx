@@ -18,16 +18,23 @@ import { LinearGradient } from "expo-linear-gradient";
 import { COLORS } from "../theme";
 import { useApp } from "../store/AppContext";
 import AdminScreen from "./AdminScreen";
+import DevVaultModal from "../components/DevVaultModal";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const GRID_SIZE = (SCREEN_WIDTH - 4) / 3;
-const ADMIN_PIN = "1994";
+
+const ROLE_LABELS: Record<string, { label: string; color: string }> = {
+  ADMIN: { label: "👑 مطور", color: "#a855f7" },
+  MODERATOR: { label: "🛡️ مشرف", color: "#3897f0" },
+  VIP: { label: "⭐ VIP", color: "#f59e0b" },
+};
 
 export default function ProfileScreen() {
   const {
     currentUser,
     posts,
     blockedUserIds,
+    adminPin,
     updateProfile,
     togglePrivateAccount,
     logout,
@@ -36,17 +43,19 @@ export default function ProfileScreen() {
 
   const [subTab, setSubTab] = useState<"posts" | "saved" | "settings">("posts");
   const [showAdmin, setShowAdmin] = useState(false);
-  const [pinPrompt, setPinPrompt] = useState(false);
-  const [pinInput, setPinInput] = useState("");
+  const [devVaultOpen, setDevVaultOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(currentUser?.name || "");
   const [editBio, setEditBio] = useState(currentUser?.bio || "");
+  const tapCountRef = React.useRef(0);
+  const tapTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   if (!currentUser) return null;
   if (showAdmin) return <AdminScreen onClose={() => setShowAdmin(false)} />;
 
   const myPosts = posts.filter((p) => p.author.id === currentUser.id);
   const savedPosts = posts.filter((p) => p.savedByMe);
+  const roleBadge = currentUser.role ? ROLE_LABELS[currentUser.role] : undefined;
 
   async function pickAvatar() {
     const res = await ImagePicker.launchImageLibraryAsync({
@@ -60,14 +69,17 @@ export default function ProfileScreen() {
     }
   }
 
-  function handleCheckPin() {
-    if (pinInput.trim() === ADMIN_PIN) {
-      setPinPrompt(false);
-      setPinInput("");
-      setShowAdmin(true);
-    } else {
-      Alert.alert("رمز خاطئ", "رمز المطور غير صحيح.");
+  function handleSecretVersionTap() {
+    tapCountRef.current += 1;
+    if (tapTimerRef.current) clearTimeout(tapTimerRef.current);
+    if (tapCountRef.current >= 5) {
+      tapCountRef.current = 0;
+      setDevVaultOpen(true);
+      return;
     }
+    tapTimerRef.current = setTimeout(() => {
+      tapCountRef.current = 0;
+    }, 2500);
   }
 
   function confirmDeleteAccount() {
@@ -136,10 +148,15 @@ export default function ProfileScreen() {
         </View>
       </View>
 
-      {/* Name, VIP Pill & Bio */}
+      {/* Name, Role, VIP Pill & Bio */}
       <View style={styles.bioWrap}>
-        <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 8 }}>
+        <View style={{ flexDirection: "row-reverse", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
           <Text style={styles.displayName}>{currentUser.name}</Text>
+          {roleBadge && (
+            <View style={[styles.vipPill, { backgroundColor: "rgba(168,85,247,0.18)" }]}>
+              <Text style={[styles.vipText, { color: roleBadge.color }]}>{roleBadge.label}</Text>
+            </View>
+          )}
           <View style={styles.vipPill}>
             <Text style={styles.vipText}>🏆 {currentUser.points ?? 150} نقطة</Text>
           </View>
@@ -223,7 +240,7 @@ export default function ProfileScreen() {
           </View>
         )
       ) : (
-        /* Settings & Google Play Compliance Panel */
+        /* Settings & Google Play Compliance Panel (Admin entry completely hidden!) */
         <View style={styles.settingsBox}>
           <View style={styles.settingRow}>
             <Switch value={!!currentUser.isPrivate} onValueChange={togglePrivateAccount} />
@@ -238,28 +255,6 @@ export default function ProfileScreen() {
             <Text style={styles.settingTitle}>المستخدمون المحظورون</Text>
           </View>
 
-          <TouchableOpacity style={styles.adminBtn} onPress={() => setPinPrompt((v) => !v)}>
-            <Ionicons name="shield-outline" size={18} color={COLORS.primary} />
-            <Text style={styles.adminBtnText}>لوحة تحكم المطور (Admin)</Text>
-          </TouchableOpacity>
-
-          {pinPrompt && (
-            <View style={styles.pinRow}>
-              <TextInput
-                style={[styles.input, { flex: 1, marginBottom: 0 }]}
-                placeholder="رمز المطور السري"
-                placeholderTextColor={COLORS.muted}
-                secureTextEntry
-                keyboardType="number-pad"
-                value={pinInput}
-                onChangeText={setPinInput}
-              />
-              <TouchableOpacity style={styles.pinBtn} onPress={handleCheckPin}>
-                <Text style={{ color: "#fff", fontWeight: "700" }}>دخول</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
           <TouchableOpacity style={styles.logoutBtn} onPress={logout}>
             <Text style={{ color: COLORS.text, fontWeight: "700" }}>تسجيل الخروج</Text>
           </TouchableOpacity>
@@ -267,8 +262,23 @@ export default function ProfileScreen() {
           <TouchableOpacity style={styles.dangerBtn} onPress={confirmDeleteAccount}>
             <Text style={{ color: COLORS.danger, fontWeight: "700" }}>حذف الحساب نهائياً</Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={handleSecretVersionTap}
+            style={{ alignItems: "center", paddingTop: 14, paddingBottom: 6 }}
+          >
+            <Text style={{ color: COLORS.muted, fontSize: 11.5 }}>SHAHINAZ Ultra · v1.0.0</Text>
+          </TouchableOpacity>
         </View>
       )}
+
+      <DevVaultModal
+        visible={devVaultOpen}
+        expectedPin={adminPin}
+        onClose={() => setDevVaultOpen(false)}
+        onUnlock={() => setShowAdmin(true)}
+      />
     </ScrollView>
   );
 }

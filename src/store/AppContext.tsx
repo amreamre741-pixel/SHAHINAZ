@@ -1,7 +1,22 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { apiFetch } from "../services/api";
-import type { AudioRoom, ChatThread, CodOrder, GroupItem, MarketItem, NoteItem, NotificationItem, Post, ReactionEmoji, Story, User } from "../types";
+import type {
+  AdminLogItem,
+  AudioRoom,
+  ChatThread,
+  CodOrder,
+  GroupItem,
+  MarketItem,
+  NoteItem,
+  NotificationItem,
+  Post,
+  ReactionEmoji,
+  RolePermissions,
+  Story,
+  User,
+  UserRole,
+} from "../types";
 
 export interface ReportItem {
   id: string;
@@ -9,6 +24,41 @@ export interface ReportItem {
   reason: string;
   createdAt: string;
 }
+
+const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
+  ADMIN: {
+    canPost: true,
+    canComment: true,
+    canSellMarket: true,
+    canCreateAudioRoom: true,
+    canBoostPosts: true,
+    canModerateContent: true,
+  },
+  MODERATOR: {
+    canPost: true,
+    canComment: true,
+    canSellMarket: true,
+    canCreateAudioRoom: true,
+    canBoostPosts: false,
+    canModerateContent: true,
+  },
+  VIP: {
+    canPost: true,
+    canComment: true,
+    canSellMarket: true,
+    canCreateAudioRoom: true,
+    canBoostPosts: true,
+    canModerateContent: false,
+  },
+  USER: {
+    canPost: true,
+    canComment: true,
+    canSellMarket: true,
+    canCreateAudioRoom: true,
+    canBoostPosts: false,
+    canModerateContent: false,
+  },
+};
 
 interface AppContextValue {
   currentUser: User | null;
@@ -32,6 +82,12 @@ interface AppContextValue {
   announcement: string;
   maintenanceMode: boolean;
   allowRegistration: boolean;
+  marketEnabled: boolean;
+  audioRoomsEnabled: boolean;
+  adminPin: string;
+  bannedWords: string[];
+  adminLogs: AdminLogItem[];
+  rolePermissions: Record<UserRole, RolePermissions>;
   login: (name: string, username: string) => void;
   loginWithApi: (email: string, password: string) => Promise<void>;
   registerWithApi: (name: string, username: string, email: string, password: string) => Promise<void>;
@@ -61,11 +117,26 @@ interface AppContextValue {
   sendMessage: (chatId: string, text: string) => void;
   adminDeletePost: (postId: string) => void;
   adminToggleSponsor: (postId: string) => void;
+  adminTogglePinPost: (postId: string) => void;
   adminDismissReport: (reportId: string) => void;
+  adminClearAllReports: () => void;
   adminToggleVerify: (userId: string) => void;
+  adminSetUserRole: (userId: string, role: UserRole) => void;
+  adminGivePoints: (userId: string, delta: number) => void;
+  adminUpdateRolePermission: (role: UserRole, key: keyof RolePermissions, value: boolean) => void;
+  adminSendGlobalNotification: (text: string) => void;
+  adminDeleteMarketItem: (itemId: string) => void;
+  adminCloseAudioRoom: (roomId: string) => void;
+  adminAddBannedWord: (word: string) => void;
+  adminRemoveBannedWord: (word: string) => void;
+  adminChangePin: (newPin: string) => void;
   adminSetAnnouncement: (text: string) => void;
   adminToggleMaintenance: () => void;
   adminToggleRegistration: () => void;
+  adminToggleMarket: () => void;
+  adminToggleAudioRooms: () => void;
+  adminClearLogs: () => void;
+  adminResetSystemSettings: () => void;
 }
 
 const DEMO_USERS: User[] = [
@@ -329,6 +400,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [announcement, setAnnouncement] = useState<string>("");
   const [maintenanceMode, setMaintenanceMode] = useState<boolean>(false);
   const [allowRegistration, setAllowRegistration] = useState<boolean>(true);
+  const [marketEnabled, setMarketEnabled] = useState<boolean>(true);
+  const [audioRoomsEnabled, setAudioRoomsEnabled] = useState<boolean>(true);
+  const [adminPin, setAdminPin] = useState<string>("1994");
+  const [bannedWords, setBannedWords] = useState<string[]>(["احتيال", "سبام"]);
+  const [rolePermissions, setRolePermissions] = useState<Record<UserRole, RolePermissions>>(DEFAULT_ROLE_PERMISSIONS);
+  const [adminLogs, setAdminLogs] = useState<AdminLogItem[]>([
+    { id: "lg_1", action: "تشغيل نظام إدارة SHAHINAZ Super-Admin", time: "اليوم" },
+  ]);
+  const adminLoadedRef = useRef(false);
+
+  function pushAdminLog(action: string) {
+    const now = new Date();
+    const t = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+    setAdminLogs((prev) => [{ id: `lg_${Date.now()}`, action, time: t }, ...prev.slice(0, 39)]);
+  }
 
   async function refreshPosts(activeToken?: string | null) {
     const t = activeToken ?? token;
@@ -368,8 +454,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     (async () => {
       try {
-        const savedToken = await AsyncStorage.getItem("shahinaz_token");
-        const savedUser = await AsyncStorage.getItem("shahinaz_user");
+        const [savedToken, savedUser, savedPin, savedConfig] = await Promise.all([
+          AsyncStorage.getItem("shahinaz_token"),
+          AsyncStorage.getItem("shahinaz_user"),
+          AsyncStorage.getItem("shahinaz_admin_pin"),
+          AsyncStorage.getItem("shahinaz_admin_config"),
+        ]);
+        if (savedPin && savedPin.length >= 4) {
+          setAdminPin(savedPin);
+        }
+        if (savedConfig) {
+          const cfg = JSON.parse(savedConfig);
+          if (typeof cfg.announcement === "string") setAnnouncement(cfg.announcement);
+          if (typeof cfg.maintenanceMode === "boolean") setMaintenanceMode(cfg.maintenanceMode);
+          if (typeof cfg.allowRegistration === "boolean") setAllowRegistration(cfg.allowRegistration);
+          if (typeof cfg.marketEnabled === "boolean") setMarketEnabled(cfg.marketEnabled);
+          if (typeof cfg.audioRoomsEnabled === "boolean") setAudioRoomsEnabled(cfg.audioRoomsEnabled);
+          if (Array.isArray(cfg.bannedWords)) setBannedWords(cfg.bannedWords);
+          if (cfg.rolePermissions) setRolePermissions({ ...DEFAULT_ROLE_PERMISSIONS, ...cfg.rolePermissions });
+        }
         if (savedToken && savedUser) {
           setToken(savedToken);
           setCurrentUser(JSON.parse(savedUser));
@@ -378,10 +481,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       } catch {
         // ignore storage errors
       } finally {
+        adminLoadedRef.current = true;
         setLoadingAuth(false);
       }
     })();
   }, []);
+
+  useEffect(() => {
+    if (!adminLoadedRef.current) return;
+    AsyncStorage.setItem(
+      "shahinaz_admin_config",
+      JSON.stringify({
+        announcement,
+        maintenanceMode,
+        allowRegistration,
+        marketEnabled,
+        audioRoomsEnabled,
+        bannedWords,
+        rolePermissions,
+      })
+    ).catch(() => {});
+  }, [announcement, maintenanceMode, allowRegistration, marketEnabled, audioRoomsEnabled, bannedWords, rolePermissions]);
 
   function login(name: string, username: string) {
     setCurrentUser({
@@ -672,29 +792,68 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setPosts((prev) => prev.filter((p) => p.id !== postId));
     setReports((prev) => prev.filter((r) => r.postId !== postId));
     setReportedPostIds((prev) => prev.filter((id) => id !== postId));
+    pushAdminLog("حذف منشور بواسطة الإدارة 🗑️");
+  }
+
+  function adminTogglePinPost(postId: string) {
+    setPosts((prev) => prev.map((p) => (p.id === postId ? { ...p, isPinned: !p.isPinned } : p)));
+    pushAdminLog("تبديل تثبيت منشور في أعلى الرئيسية 📌");
   }
 
   function adminDismissReport(reportId: string) {
     const rep = reports.find((r) => r.id === reportId);
     setReports((prev) => prev.filter((r) => r.id !== reportId));
     if (rep) setReportedPostIds((prev) => prev.filter((id) => id !== rep.postId));
+    pushAdminLog("تجاهل وإغلاق بلاغ ✓");
+  }
+
+  function adminClearAllReports() {
+    setReports([]);
+    setReportedPostIds([]);
+    pushAdminLog("تصفير جميع البلاغات المعلقة");
   }
 
   function adminToggleVerify(userId: string) {
     setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, verified: !u.verified } : u)));
+    setCurrentUser((prev) => {
+      if (!prev || prev.id !== userId) return prev;
+      const updated = { ...prev, verified: !prev.verified };
+      AsyncStorage.setItem("shahinaz_user", JSON.stringify(updated)).catch(() => {});
+      return updated;
+    });
     setPosts((prev) =>
       prev.map((p) =>
         p.author.id === userId ? { ...p, author: { ...p.author, verified: !p.author.verified } } : p
       )
     );
+    pushAdminLog("تحديث حالة التوثيق الأزرق لمستخدم ☑️");
   }
 
   function adminSetAnnouncement(text: string) {
-    setAnnouncement(text.trim());
+    const clean = text.trim();
+    setAnnouncement(clean);
+    pushAdminLog(clean ? `بث إعلان عام: ${clean.slice(0, 30)}` : "إيقاف الإعلان العام");
+  }
+
+  function adminSendGlobalNotification(text: string) {
+    const clean = text.trim();
+    if (!clean) return;
+    setNotifications((prev) => [
+      {
+        id: `n_admin_${Date.now()}`,
+        emoji: "🛡️",
+        text: `إدارة SHAHINAZ: ${clean}`,
+        time: "الآن",
+        read: false,
+      },
+      ...prev,
+    ]);
+    pushAdminLog(`إرسال إشعار فوري للجميع: ${clean.slice(0, 28)}`);
   }
 
   function adminToggleMaintenance() {
     setMaintenanceMode((v) => !v);
+    pushAdminLog("تبديل وضع الصيانة (إيقاف/تفعيل النشر) ⚡");
   }
 
   function setMyNote(text: string) {
@@ -748,9 +907,103 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     ]);
   }
 
+  function adminSetUserRole(userId: string, role: UserRole) {
+    setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, role } : u)));
+    setCurrentUser((prev) => {
+      if (!prev || prev.id !== userId) return prev;
+      const updated = { ...prev, role };
+      AsyncStorage.setItem("shahinaz_user", JSON.stringify(updated)).catch(() => {});
+      return updated;
+    });
+    pushAdminLog(`تغيير صلاحية المستخدم إلى ${role}`);
+  }
+
+  function adminGivePoints(userId: string, delta: number) {
+    setUsers((prev) =>
+      prev.map((u) => (u.id === userId ? { ...u, points: Math.max(0, (u.points ?? 100) + delta) } : u))
+    );
+    setCurrentUser((prev) => {
+      if (!prev || prev.id !== userId) return prev;
+      const updated = { ...prev, points: Math.max(0, (prev.points ?? 100) + delta) };
+      AsyncStorage.setItem("shahinaz_user", JSON.stringify(updated)).catch(() => {});
+      return updated;
+    });
+    pushAdminLog(`${delta >= 0 ? "منح" : "خصم"} ${Math.abs(delta)} نقطة لمستخدم`);
+  }
+
+  function adminUpdateRolePermission(role: UserRole, key: keyof RolePermissions, value: boolean) {
+    setRolePermissions((prev) => ({
+      ...prev,
+      [role]: { ...prev[role], [key]: value },
+    }));
+    pushAdminLog(`تعديل صلاحية ${role}: ${key} = ${value ? "مُفعّل" : "معطّل"}`);
+  }
+
+  function adminDeleteMarketItem(itemId: string) {
+    setMarketItems((prev) => prev.filter((m) => m.id !== itemId));
+    pushAdminLog("حذف منتج من السوق");
+  }
+
+  function adminCloseAudioRoom(roomId: string) {
+    setAudioRooms((prev) => prev.filter((r) => r.id !== roomId));
+    pushAdminLog("إغلاق غرفة صوتية مباشرة");
+  }
+
+  function adminAddBannedWord(word: string) {
+    const clean = word.trim();
+    if (!clean) return;
+    setBannedWords((prev) => (prev.includes(clean) ? prev : [...prev, clean]));
+    pushAdminLog(`إضافة كلمة محظورة: ${clean}`);
+  }
+
+  function adminRemoveBannedWord(word: string) {
+    setBannedWords((prev) => prev.filter((w) => w !== word));
+    pushAdminLog(`إزالة كلمة محظورة: ${word}`);
+  }
+
+  function adminChangePin(newPin: string) {
+    const clean = newPin.trim();
+    if (clean.length < 4) return;
+    setAdminPin(clean);
+    AsyncStorage.setItem("shahinaz_admin_pin", clean).catch(() => {});
+    pushAdminLog("تحديث رمز المطور السري 🔐");
+  }
+
   function adminToggleRegistration() {
     setAllowRegistration((v) => !v);
+    pushAdminLog("تغيير حالة التسجيل في التطبيق");
   }
+
+  function adminToggleMarket() {
+    setMarketEnabled((v) => !v);
+    pushAdminLog("تغيير حالة قسم السوق");
+  }
+
+  function adminToggleAudioRooms() {
+    setAudioRoomsEnabled((v) => !v);
+    pushAdminLog("تغيير حالة الغرف الصوتية");
+  }
+
+  function adminClearLogs() {
+    setAdminLogs([{ id: `lg_${Date.now()}`, action: "تم مسح سجل النشاط السابق", time: "الآن" }]);
+  }
+
+  function adminResetSystemSettings() {
+    setMaintenanceMode(false);
+    setAllowRegistration(true);
+    setMarketEnabled(true);
+    setAudioRoomsEnabled(true);
+    setAnnouncement("");
+    setRolePermissions(DEFAULT_ROLE_PERMISSIONS);
+    pushAdminLog("إعادة ضبط إعدادات النظام للوضع الافتراضي 🔄");
+  }
+
+  const visiblePosts = posts
+    .filter((p) => !blockedUserIds.includes(p.author.id) && !reportedPostIds.includes(p.id))
+    .sort((a, b) => Number(!!b.isPinned) - Number(!!a.isPinned));
+
+  const mergedAllUsers =
+    currentUser && !users.some((u) => u.id === currentUser.id) ? [currentUser, ...users] : users;
 
   return (
     <AppContext.Provider
@@ -758,9 +1011,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         currentUser,
         token,
         loadingAuth,
-        posts: posts.filter((p) => !blockedUserIds.includes(p.author.id) && !reportedPostIds.includes(p.id)),
+        posts: visiblePosts,
         allPosts: posts,
-        allUsers: users,
+        allUsers: mergedAllUsers,
         stories,
         notifications,
         marketItems,
@@ -776,6 +1029,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         announcement,
         maintenanceMode,
         allowRegistration,
+        marketEnabled,
+        audioRoomsEnabled,
+        adminPin,
+        bannedWords,
+        adminLogs,
+        rolePermissions,
         login,
         loginWithApi,
         registerWithApi,
@@ -805,11 +1064,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         sendMessage,
         adminDeletePost,
         adminToggleSponsor,
+        adminTogglePinPost,
         adminDismissReport,
+        adminClearAllReports,
         adminToggleVerify,
+        adminSetUserRole,
+        adminGivePoints,
+        adminUpdateRolePermission,
+        adminSendGlobalNotification,
+        adminDeleteMarketItem,
+        adminCloseAudioRoom,
+        adminAddBannedWord,
+        adminRemoveBannedWord,
+        adminChangePin,
         adminSetAnnouncement,
         adminToggleMaintenance,
         adminToggleRegistration,
+        adminToggleMarket,
+        adminToggleAudioRooms,
+        adminClearLogs,
+        adminResetSystemSettings,
       }}
     >
       {children}
