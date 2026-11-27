@@ -513,7 +513,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                   createdAt: new Date(c.createdAt).toLocaleTimeString("ar-DZ", { hour: "2-digit", minute: "2-digit" }),
                 }))
               : [],
-            createdAt: new Date(p.createdAt).toLocaleDateString("ar-DZ"),
+            createdAt: (() => {
+              const diffMin = Math.max(0, Math.floor((Date.now() - new Date(p.createdAt).getTime()) / 60000));
+              if (diffMin < 1) return "الآن";
+              if (diffMin < 60) return `منذ ${diffMin} د`;
+              const diffHr = Math.floor(diffMin / 60);
+              if (diffHr < 24) return `منذ ${diffHr} س`;
+              const diffDays = Math.floor(diffHr / 24);
+              return `منذ ${diffDays} ي`;
+            })(),
           }));
         if (mapped.length > 0) {
           setPosts(mapped.length < 4 ? [...mapped, ...INITIAL_POSTS] : mapped);

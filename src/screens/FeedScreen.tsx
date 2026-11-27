@@ -33,6 +33,7 @@ import AuroraBackground from "../components/AuroraBackground";
 import LiveStreamModal from "../components/LiveStreamModal";
 import WalletModal from "../components/WalletModal";
 import FriendsModal from "../components/FriendsModal";
+import ReelsModal from "../components/ReelsModal";
 import { PulseDot } from "../components/LuxuryMotion";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -116,7 +117,13 @@ function PostMediaWithDoubleTap({
   );
 }
 
-export default function FeedScreen({ onOpenMessages }: { onOpenMessages?: () => void }) {
+export default function FeedScreen({
+  onOpenMessages,
+  onOpenCreate,
+}: {
+  onOpenMessages?: () => void;
+  onOpenCreate?: () => void;
+}) {
   const {
     currentUser,
     posts,
@@ -169,6 +176,7 @@ export default function FeedScreen({ onOpenMessages }: { onOpenMessages?: () => 
   const [liveOpen, setLiveOpen] = useState(false);
   const [walletOpen, setWalletOpen] = useState(false);
   const [friendsOpen, setFriendsOpen] = useState(false);
+  const [reelsOpen, setReelsOpen] = useState(false);
   const [devVaultOpen, setDevVaultOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
   const [selectedAuthorId, setSelectedAuthorId] = useState<string | null>(null);
@@ -509,6 +517,14 @@ export default function FeedScreen({ onOpenMessages }: { onOpenMessages?: () => 
               </TouchableOpacity>
 
               <TouchableOpacity
+                style={[styles.quickHubPill, { backgroundColor: "rgba(168,85,247,0.15)", borderColor: "rgba(192,132,252,0.5)" }]}
+                onPress={() => setReelsOpen(true)}
+              >
+                <Ionicons name="film" size={14} color="#C084FC" />
+                <Text style={{ color: "#C084FC", fontSize: 11.5, fontWeight: "900" }}>ريلز 🎬</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
                 style={[styles.quickHubPill, { backgroundColor: theme.surface, borderColor: theme.borderGlow }]}
                 onPress={() => setWalletOpen(true)}
               >
@@ -655,7 +671,9 @@ export default function FeedScreen({ onOpenMessages }: { onOpenMessages?: () => 
             <View style={styles.captionWrap}>
               {!!item.content && !item.bgColor && (
                 <Text style={[styles.captionText, { color: theme.text }]}>
-                  <Text style={{ fontWeight: "900", color: theme.primary }}>{item.author.name}  </Text>
+                  {(!!item.imageUri || !!item.videoUri) && (
+                    <Text style={{ fontWeight: "900", color: theme.primary }}>{item.author.name}  </Text>
+                  )}
                   {item.content}
                 </Text>
               )}
@@ -1205,6 +1223,7 @@ export default function FeedScreen({ onOpenMessages }: { onOpenMessages?: () => 
       <LiveStreamModal visible={liveOpen} onClose={() => setLiveOpen(false)} />
       <WalletModal visible={walletOpen} onClose={() => setWalletOpen(false)} />
       <FriendsModal visible={friendsOpen} onClose={() => setFriendsOpen(false)} onStartChat={() => onOpenMessages?.()} />
+      <ReelsModal visible={reelsOpen} onClose={() => setReelsOpen(false)} onCreateReel={() => onOpenCreate?.()} />
 
       <DevVaultModal
         visible={devVaultOpen}

@@ -61,7 +61,12 @@ function MainApp() {
       <AnimatedSplashGate theme={theme} />
 
       <View style={styles.body}>
-        {tab === "feed" && <FeedScreen onOpenMessages={() => setTab("messages")} />}
+        {tab === "feed" && (
+          <FeedScreen
+            onOpenMessages={() => setTab("messages")}
+            onOpenCreate={() => setTab("create")}
+          />
+        )}
         {tab === "explore" && <ExploreScreen />}
         {tab === "create" && <CreatePostScreen onDone={() => setTab("feed")} />}
         {tab === "messages" && <MessagesScreen />}

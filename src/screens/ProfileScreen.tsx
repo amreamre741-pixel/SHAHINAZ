@@ -22,6 +22,7 @@ import DevVaultModal from "../components/DevVaultModal";
 import DailyStreakModal from "../components/DailyStreakModal";
 import ThemeStudioModal from "../components/ThemeStudioModal";
 import WalletModal from "../components/WalletModal";
+import { uploadMediaFile } from "../services/mediaUpload";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const GRID_SIZE = (SCREEN_WIDTH - 36) / 3;
@@ -35,6 +36,7 @@ const ROLE_LABELS: Record<string, { label: string; color: string }> = {
 export default function ProfileScreen() {
   const {
     currentUser,
+    token,
     posts,
     allUsers,
     blockedUserIds,
@@ -89,10 +91,18 @@ export default function ProfileScreen() {
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [1, 1],
-      quality: 0.75,
+      quality: 0.72,
     });
     if (!res.canceled && res.assets[0]?.uri) {
-      updateProfile(currentUser!.name, currentUser!.bio, res.assets[0].uri);
+      let finalUri = res.assets[0].uri;
+      if (token) {
+        try {
+          finalUri = await uploadMediaFile(finalUri, "image/jpeg", token);
+        } catch {
+          // keep local URI if offline
+        }
+      }
+      updateProfile(currentUser!.name, currentUser!.bio, finalUri);
     }
   }
 

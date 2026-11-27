@@ -55,12 +55,26 @@ export default function LiveStreamModal({ visible, onClose }: { visible: boolean
   const [cameraPerm, requestCameraPerm] = useCameraPermissions();
   const [facing, setFacing] = useState<"front" | "back">("front");
   const [micMuted, setMicMuted] = useState(false);
+  const [torchOn, setTorchOn] = useState(false);
+  const [liveSeconds, setLiveSeconds] = useState(0);
 
   const [channels, setChannels] = useState<LiveRoomItem[]>(FALLBACK_CHANNELS);
   const [channelIdx, setChannelIdx] = useState(0);
   const [isHosting, setIsHosting] = useState(false);
   const [activeLiveRoomId, setActiveLiveRoomId] = useState<string | null>(null);
   const [hostTitle, setHostTitle] = useState("بثي المباشر على SHAHINAZ 🔴✨");
+
+  useEffect(() => {
+    if (!isHosting) {
+      setLiveSeconds(0);
+      setTorchOn(false);
+      return;
+    }
+    const timer = setInterval(() => setLiveSeconds((s) => s + 1), 1000);
+    return () => clearInterval(timer);
+  }, [isHosting]);
+
+  const formattedLiveTime = `${String(Math.floor(liveSeconds / 60)).padStart(2, "0")}:${String(liveSeconds % 60).padStart(2, "0")}`;
   const [chatMsg, setChatMsg] = useState("");
   const [messages, setMessages] = useState<{ id: string; user: string; text: string }[]>([
     { id: "m1", user: "SHAHINAZ LIVE", text: "أهلاً بك في البث المباشر — الكاميرا والدردشة جاهزة! 🔴" },
@@ -219,7 +233,7 @@ export default function LiveStreamModal({ visible, onClose }: { visible: boolean
       <View style={styles.root}>
         {/* 100% REAL PHONE CAMERA WHEN HOSTING LIVE */}
         {isHosting ? (
-          <CameraView style={StyleSheet.absoluteFillObject} facing={facing} />
+          <CameraView style={StyleSheet.absoluteFillObject} facing={facing} enableTorch={torchOn} />
         ) : activeChannel?.coverUri ? (
           <Image source={{ uri: activeChannel.coverUri }} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
         ) : (
@@ -253,7 +267,7 @@ export default function LiveStreamModal({ visible, onClose }: { visible: boolean
               <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 5 }}>
                 <PulseDot color="#EF4444" size={7} />
                 <Text style={{ color: "#FCA5A5", fontSize: 11, fontWeight: "800" }}>
-                  {isHosting ? "الكاميرا مفتوحة مباشرة" : `مباشر · 👁️ ${activeChannel?.viewers || 1}`}
+                  {isHosting ? `مباشر الآن · ${formattedLiveTime}` : `مباشر · 👁️ ${activeChannel?.viewers || 1}`}
                 </Text>
               </View>
             </View>
@@ -267,6 +281,9 @@ export default function LiveStreamModal({ visible, onClose }: { visible: boolean
                   style={styles.closeOrb}
                 >
                   <Ionicons name="camera-reverse-outline" size={21} color="#fff" />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setTorchOn((t) => !t)} style={styles.closeOrb}>
+                  <Ionicons name={torchOn ? "flash" : "flash-outline"} size={20} color={torchOn ? "#FDE047" : "#fff"} />
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => setMicMuted((m) => !m)} style={styles.closeOrb}>
                   <Ionicons name={micMuted ? "mic-off" : "mic"} size={20} color={micMuted ? "#FCA5A5" : "#fff"} />
@@ -330,7 +347,7 @@ export default function LiveStreamModal({ visible, onClose }: { visible: boolean
 
         {/* Center Overlay */}
         <View style={styles.centerStage}>
-          {isHosting && (
+          {isHosting ? (
             <TextInput
               style={styles.hostTitleInput}
               value={hostTitle}
@@ -338,6 +355,30 @@ export default function LiveStreamModal({ visible, onClose }: { visible: boolean
               placeholder="عنوان بثك المباشر..."
               placeholderTextColor="rgba(255,255,255,0.7)"
             />
+          ) : (
+            <TouchableOpacity onPress={handleToggleGoLive} activeOpacity={0.9} style={{ width: "86%" }}>
+              <LinearGradient
+                colors={["#EF4444", "#B91C1C"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={{
+                  flexDirection: "row-reverse",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 10,
+                  paddingVertical: 15,
+                  paddingHorizontal: 20,
+                  borderRadius: 999,
+                  borderWidth: 1.5,
+                  borderColor: "rgba(254,202,202,0.55)",
+                }}
+              >
+                <Ionicons name="videocam" size={22} color="#fff" />
+                <Text style={{ color: "#fff", fontWeight: "900", fontSize: 15 }}>
+                  ابدأ بثك المباشر الآن بالكاميرا 🔴
+                </Text>
+              </LinearGradient>
+            </TouchableOpacity>
           )}
 
           {!!giftBanner && (
