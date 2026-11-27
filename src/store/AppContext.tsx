@@ -1,4 +1,6 @@
-import React, { createContext, useContext, useState } from "react";
+import React, { createContext, useContext, useEffect, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { apiFetch } from "../services/api";
 import type { ChatThread, GroupItem, MarketItem, NotificationItem, Post, ReactionEmoji, Story, User } from "../types";
 
 export interface ReportItem {
@@ -10,6 +12,8 @@ export interface ReportItem {
 
 interface AppContextValue {
   currentUser: User | null;
+  token: string | null;
+  loadingAuth: boolean;
   posts: Post[];
   allPosts: Post[];
   allUsers: User[];
@@ -26,6 +30,9 @@ interface AppContextValue {
   maintenanceMode: boolean;
   allowRegistration: boolean;
   login: (name: string, username: string) => void;
+  loginWithApi: (email: string, password: string) => Promise<void>;
+  registerWithApi: (name: string, username: string, email: string, password: string) => Promise<void>;
+  refreshPosts: () => Promise<void>;
   logout: () => void;
   deleteAccount: () => void;
   updateProfile: (name: string, bio: string, avatarUri?: string) => void;
@@ -137,6 +144,8 @@ const AppContext = createContext<AppContextValue | null>(null);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [token, setToken] = useState<string | null>(null);
+  const [loadingAuth, setLoadingAuth] = useState(true);
   const [users, setUsers] = useState<User[]>(DEMO_USERS);
   const [posts, setPosts] = useState<Post[]>(INITIAL_POSTS);
   const [stories, setStories] = useState<Story[]>(INITIAL_STORIES);
@@ -152,6 +161,59 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [maintenanceMode, setMaintenanceMode] = useState<boolean>(false);
   const [allowRegistration, setAllowRegistration] = useState<boolean>(true);
 
+  async function refreshPosts(activeToken?: string | null) {
+    const t = activeToken ?? token;
+    if (!t) return;
+    try {
+      const apiPosts = await apiFetch<any[]>("/api/posts", t);
+      if (Array.isArray(apiPosts) && apiPosts.length > 0) {
+        const mapped: Post[] = apiPosts.map((p) => ({
+          id: p.id,
+          author: {
+            id: p.author.id,
+            name: p.author.name,
+            username: p.author.username,
+            bio: "",
+            avatarEmoji: "👤",
+            avatarUri: p.author.avatarUrl || undefined,
+            verified: !!p.author.verified,
+            followers: 0,
+            following: 0,
+          },
+          content: p.content || "",
+          imageUri: p.imageUrl || undefined,
+          location: p.location || undefined,
+          likes: p._count?.likes ?? 0,
+          likedByMe: Array.isArray(p.likes) && p.likes.length > 0,
+          savedByMe: false,
+          comments: [],
+          createdAt: new Date(p.createdAt).toLocaleDateString("ar-DZ"),
+        }));
+        setPosts(mapped);
+      }
+    } catch {
+      // keep existing posts if offline or Render cold-starting
+    }
+  }
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const savedToken = await AsyncStorage.getItem("shahinaz_token");
+        const savedUser = await AsyncStorage.getItem("shahinaz_user");
+        if (savedToken && savedUser) {
+          setToken(savedToken);
+          setCurrentUser(JSON.parse(savedUser));
+          refreshPosts(savedToken);
+        }
+      } catch {
+        // ignore storage errors
+      } finally {
+        setLoadingAuth(false);
+      }
+    })();
+  }, []);
+
   function login(name: string, username: string) {
     setCurrentUser({
       id: "me",
@@ -165,6 +227,56 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       followers: 12,
       following: 24,
     });
+  }
+
+  async function registerWithApi(name: string, username: string, email: string, password: string) {
+    const data = await apiFetch<{ token: string; user: any }>("/api/auth/register", null, {
+      method: "POST",
+      body: JSON.stringify({ name, username, email, password }),
+    });
+    const u: User = {
+      id: data.user.id,
+      name: data.user.name,
+      username: data.user.username,
+      bio: data.user.bio || "عضو جديد في مجتمع SHAHINAZ ✨",
+      avatarEmoji: "🌟",
+      avatarUri: data.user.avatarUrl || undefined,
+      verified: false,
+      isPrivate: false,
+      points: 100,
+      followers: 0,
+      following: 0,
+    };
+    setToken(data.token);
+    setCurrentUser(u);
+    await AsyncStorage.setItem("shahinaz_token", data.token);
+    await AsyncStorage.setItem("shahinaz_user", JSON.stringify(u));
+    await refreshPosts(data.token);
+  }
+
+  async function loginWithApi(email: string, password: string) {
+    const data = await apiFetch<{ token: string; user: any }>("/api/auth/login", null, {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    });
+    const u: User = {
+      id: data.user.id,
+      name: data.user.name,
+      username: data.user.username,
+      bio: data.user.bio || "عضو في مجتمع SHAHINAZ ✨",
+      avatarEmoji: "🌟",
+      avatarUri: data.user.avatarUrl || undefined,
+      verified: false,
+      isPrivate: false,
+      points: 150,
+      followers: 0,
+      following: 0,
+    };
+    setToken(data.token);
+    setCurrentUser(u);
+    await AsyncStorage.setItem("shahinaz_token", data.token);
+    await AsyncStorage.setItem("shahinaz_user", JSON.stringify(u));
+    await refreshPosts(data.token);
   }
 
   function togglePrivateAccount() {
@@ -200,10 +312,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   function logout() {
     setCurrentUser(null);
+    setToken(null);
+    AsyncStorage.removeItem("shahinaz_token").catch(() => {});
+    AsyncStorage.removeItem("shahinaz_user").catch(() => {});
   }
 
   function deleteAccount() {
-    setCurrentUser(null);
+    if (token) {
+      apiFetch("/api/auth/me", token, { method: "DELETE" }).catch(() => {});
+    }
+    logout();
     setPosts(INITIAL_POSTS);
     setBlockedUserIds([]);
     setReportedPostIds([]);
@@ -224,6 +342,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }
 
   function toggleLike(postId: string) {
+    if (token && !postId.startsWith("p_")) {
+      apiFetch(`/api/posts/${postId}/like`, token, { method: "POST" }).catch(() => {});
+    }
     setPosts((prev) =>
       prev.map((p) =>
         p.id === postId
@@ -239,6 +360,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   function addComment(postId: string, text: string) {
     if (!currentUser || !text.trim()) return;
+    if (token && !postId.startsWith("p_")) {
+      apiFetch(`/api/posts/${postId}/comments`, token, {
+        method: "POST",
+        body: JSON.stringify({ text: text.trim() }),
+      }).catch(() => {});
+    }
     setPosts((prev) =>
       prev.map((p) =>
         p.id === postId
@@ -262,6 +389,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   function createPost(content: string, imageUri?: string, location?: string, bgColor?: string, pollOptions?: string[]) {
     if (!currentUser || (!content.trim() && !imageUri)) return;
+    if (token) {
+      apiFetch("/api/posts", token, {
+        method: "POST",
+        body: JSON.stringify({ content: content.trim(), imageUrl: imageUri || "", location: location?.trim() || "" }),
+      })
+        .then(() => refreshPosts(token))
+        .catch(() => {});
+    }
     const cleanOpts = (pollOptions || []).map((o) => o.trim()).filter(Boolean);
     const newPost: Post = {
       id: `p_${Date.now()}`,
@@ -401,6 +536,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     <AppContext.Provider
       value={{
         currentUser,
+        token,
+        loadingAuth,
         posts: posts.filter((p) => !blockedUserIds.includes(p.author.id) && !reportedPostIds.includes(p.id)),
         allPosts: posts,
         allUsers: users,
@@ -417,6 +554,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         maintenanceMode,
         allowRegistration,
         login,
+        loginWithApi,
+        registerWithApi,
+        refreshPosts,
         logout,
         deleteAccount,
         updateProfile,

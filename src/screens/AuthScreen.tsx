@@ -1,17 +1,18 @@
 import React, { useState } from "react";
-import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { COLORS } from "../theme";
 import { useApp } from "../store/AppContext";
 
 export default function AuthScreen() {
-  const { login } = useApp();
+  const { loginWithApi, registerWithApi } = useApp();
   const [mode, setMode] = useState<"register" | "login">("register");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [busy, setBusy] = useState(false);
 
-  function handleSubmit() {
+  async function handleSubmit() {
     if (!email.trim() || !email.includes("@")) {
       Alert.alert("تنبيه", "يرجى إدخال بريد Gmail صحيح (مثال: name@gmail.com)");
       return;
@@ -30,26 +31,28 @@ export default function AuthScreen() {
         return;
       }
     }
-    const displayName = name.trim() || email.split("@")[0];
-    const username = email.split("@")[0].replace(/[^a-zA-Z0-9_]/g, "_");
-    login(displayName, username);
-  }
 
-  function handleGoogleQuickSignIn() {
-    if (!acceptedTerms && mode === "register") {
-      Alert.alert("شروط الاستخدام", "يرجى تفعيل الموافقة على شروط الاستخدام وسياسة الخصوصية أولاً.");
-      return;
+    setBusy(true);
+    try {
+      if (mode === "register") {
+        const username = email.split("@")[0].replace(/[^a-zA-Z0-9_]/g, "_") + "_" + Math.floor(Math.random() * 99);
+        await registerWithApi(name.trim(), username, email.trim(), password);
+      } else {
+        await loginWithApi(email.trim(), password);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "تعذر الاتصال بالسيرفر، حاول مجدداً";
+      Alert.alert("خطأ في الدخول", msg);
+    } finally {
+      setBusy(false);
     }
-    const cleanEmail = email.trim().includes("@") ? email.trim() : "user@gmail.com";
-    const displayName = name.trim() || cleanEmail.split("@")[0];
-    login(displayName, cleanEmail.split("@")[0]);
   }
 
   return (
     <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
       <View style={styles.hero}>
         <Text style={styles.logo}>SHAHINAZ</Text>
-        <Text style={styles.subtitle}>منصة اجتماعية عصرية تجمع بين الصور والتواصل السريع</Text>
+        <Text style={styles.subtitle}>منصة اجتماعية عصرية أونلاين — متصلة مباشرة بـ Neon</Text>
       </View>
 
       <View style={styles.card}>
@@ -117,20 +120,14 @@ export default function AuthScreen() {
           </TouchableOpacity>
         )}
 
-        <TouchableOpacity style={styles.btn} onPress={handleSubmit}>
-          <Text style={styles.btnText}>
-            {mode === "register" ? "إنشاء حساب بـ Gmail" : "دخول إلى SHAHINAZ"}
-          </Text>
-        </TouchableOpacity>
-
-        <View style={styles.dividerRow}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>أو</Text>
-          <View style={styles.dividerLine} />
-        </View>
-
-        <TouchableOpacity style={styles.googleBtn} onPress={handleGoogleQuickSignIn}>
-          <Text style={styles.googleBtnText}>G  المتابعة السريعة بحساب Google (Gmail)</Text>
+        <TouchableOpacity style={styles.btn} onPress={handleSubmit} disabled={busy}>
+          {busy ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.btnText}>
+              {mode === "register" ? "إنشاء حساب أونلاين 🚀" : "دخول إلى SHAHINAZ"}
+            </Text>
+          )}
         </TouchableOpacity>
       </View>
     </ScrollView>
@@ -181,14 +178,4 @@ const styles = StyleSheet.create({
   termsText: { flex: 1, color: COLORS.muted, fontSize: 12, lineHeight: 18, textAlign: "right" },
   btn: { backgroundColor: COLORS.primary, borderRadius: 14, padding: 14, alignItems: "center", marginTop: 10 },
   btnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
-  dividerRow: { flexDirection: "row", alignItems: "center", gap: 10, marginVertical: 14 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: COLORS.border },
-  dividerText: { color: COLORS.muted, fontSize: 12 },
-  googleBtn: {
-    backgroundColor: "#ffffff",
-    borderRadius: 14,
-    padding: 13,
-    alignItems: "center",
-  },
-  googleBtnText: { color: "#0f172a", fontSize: 14, fontWeight: "700" },
 });
