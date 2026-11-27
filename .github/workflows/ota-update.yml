@@ -2,13 +2,15 @@ name: SHAHINAZ Auto OTA Update
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
     paths:
       - "App.tsx"
       - "app.json"
       - "package.json"
       - "src/**"
       - "assets/**"
+      - ".github/workflows/ota-update.yml"
   workflow_dispatch:
 
 jobs:
@@ -31,13 +33,13 @@ jobs:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: |
           if [ -z "$EXPO_TOKEN" ]; then
-            echo "has_token=false" >> $GITHUB_OUTPUT
+            echo "has_token=false" >> "$GITHUB_OUTPUT"
             echo "EXPO_TOKEN secret is not configured yet. Skipping automatic EAS OTA publish."
           else
-            echo "has_token=true" >> $GITHUB_OUTPUT
+            echo "has_token=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Setup Expo & EAS CLI
+      - name: Setup Expo and EAS CLI
         if: steps.check_token.outputs.has_token == 'true'
         uses: expo/expo-github-action@v8
         with:
@@ -46,12 +48,19 @@ jobs:
 
       - name: Install dependencies
         if: steps.check_token.outputs.has_token == 'true'
-        run: npm ci || npm install
+        run: |
+          npm ci || npm install
 
       - name: Publish OTA to preview channel
         if: steps.check_token.outputs.has_token == 'true'
-        run: eas update --branch preview --message "Auto OTA: ${{ github.event.head_commit.message || 'SHAHINAZ Update' }}" --non-interactive
+        env:
+          OTA_MSG: ${{ github.event.head_commit.message || 'SHAHINAZ Auto OTA Update' }}
+        run: |
+          eas update --channel preview --platform android --message "$OTA_MSG" --non-interactive
 
       - name: Publish OTA to production channel
         if: steps.check_token.outputs.has_token == 'true'
-        run: eas update --branch production --message "Auto OTA: ${{ github.event.head_commit.message || 'SHAHINAZ Update' }}" --non-interactive
+        env:
+          OTA_MSG: ${{ github.event.head_commit.message || 'SHAHINAZ Auto OTA Update' }}
+        run: |
+          eas update --channel production --platform android --message "$OTA_MSG" --non-interactive
