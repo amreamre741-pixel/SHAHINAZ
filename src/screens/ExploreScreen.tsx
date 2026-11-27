@@ -17,49 +17,92 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { COLORS } from "../theme";
 import { useApp } from "../store/AppContext";
-import type { Post } from "../types";
+import type { AudioRoom, Post } from "../types";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const GRID_SIZE = (SCREEN_WIDTH - 4) / 3;
 
-const TRENDING_TAGS = ["#الجزائر", "#SHAHINAZ", "#وهران", "#تجارة", "#تقنية"];
+const TRENDING_TAGS = ["#الجزائر", "#تحدي_الأسبوع", "#SHAHINAZ", "#وهران", "#تجارة"];
 
-const DEMO_REELS = [
+const SHOP_REELS = [
   {
     id: "r_1",
-    author: "ياسين بن علي",
-    avatarUri: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&q=80",
-    imageUri: "https://images.unsplash.com/photo-1519681393784-d120267933ba?w=900&q=85",
-    title: "جولة ليلية ساحرة تحت النجوم في الجزائر 🇩🇿✨",
-    likes: 4280,
-    comments: 142,
+    author: "كريم تكنولوجي",
+    avatarUri: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&q=80",
+    imageUri: "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=900&q=85",
+    title: "ساعة ذكية Ultra مقاومة للماء + شاحن مغناطيسي ⌚🔥 التوصيل لـ 58 ولاية!",
+    productTitle: "ساعة ذكية Ultra مقاومة للماء",
+    priceDzd: 4900,
+    sellerPhone: "0550123456",
+    likes: 12500,
+    comments: 510,
   },
   {
     id: "r_2",
     author: "سارة منصوري",
     avatarUri: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&q=80",
     imageUri: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=900&q=85",
-    title: "أجمل شواطئ وهران الصافية هذا الصباح 🌊☀️",
+    title: "أجمل شواطئ وهران الصافية هذا الصباح 🌊☀️ #تحدي_الأسبوع",
+    productTitle: "",
+    priceDzd: 0,
+    sellerPhone: "",
     likes: 8920,
     comments: 318,
   },
   {
     id: "r_3",
-    author: "كريم تكنولوجي",
-    avatarUri: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&q=80",
-    imageUri: "https://images.unsplash.com/photo-1518770660439-4636190af475?w=900&q=85",
-    title: "كيف تبدأ مشروعك الرقمي في الجزائر بأقل تكلفة 🚀💻",
-    likes: 12500,
-    comments: 510,
+    author: "ياسين بن علي",
+    avatarUri: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&q=80",
+    imageUri: "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=900&q=85",
+    title: "سماعات بلوتوث عازلة للصوت — عرض خاص لمتابعي SHAHINAZ 🎧⚡",
+    productTitle: "سماعات بلوتوث عازلة للصوت",
+    priceDzd: 3200,
+    sellerPhone: "0661234567",
+    likes: 4280,
+    comments: 142,
   },
 ];
 
+const LEADERBOARD = [
+  { rank: 1, name: "سارة منصوري", wilaya: "وهران", points: 2840, avatarUri: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&q=80" },
+  { rank: 2, name: "ياسين بن علي", wilaya: "الجزائر", points: 2190, avatarUri: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&q=80" },
+  { rank: 3, name: "كريم تكنولوجي", wilaya: "سطيف", points: 1750, avatarUri: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&q=80" },
+];
+
 export default function ExploreScreen() {
-  const { posts, marketItems, groups, addMarketItem, toggleJoinGroup, toggleLike } = useApp();
-  const [mode, setMode] = useState<"explore" | "reels" | "groups" | "market">("explore");
+  const {
+    posts,
+    marketItems,
+    audioRooms,
+    addMarketItem,
+    createAudioRoom,
+    placeCodOrder,
+    toggleLike,
+  } = useApp();
+
+  const [mode, setMode] = useState<"explore" | "reels" | "rooms" | "market">("explore");
   const [q, setQ] = useState("");
   const [likedReels, setLikedReels] = useState<string[]>([]);
   const [previewPost, setPreviewPost] = useState<Post | null>(null);
+
+  // Weekly Challenge modal
+  const [challengeOpen, setChallengeOpen] = useState(false);
+
+  // TikTok Shop COD Order Sheet
+  const [codProduct, setCodProduct] = useState<{ title: string; priceDzd: number; phone: string } | null>(null);
+  const [buyerName, setBuyerName] = useState("");
+  const [buyerPhone, setBuyerPhone] = useState("");
+  const [buyerWilaya, setBuyerWilaya] = useState("16 - الجزائر العاصمة");
+
+  // Live Audio Room Stage
+  const [activeRoom, setActiveRoom] = useState<AudioRoom | null>(null);
+  const [micOn, setMicOn] = useState(false);
+  const [handRaised, setHandRaised] = useState(false);
+  const [newRoomOpen, setNewRoomOpen] = useState(false);
+  const [roomTitle, setRoomTitle] = useState("");
+  const [roomTopic, setRoomTopic] = useState("");
+
+  // Marketplace add form
   const [addingProduct, setAddingProduct] = useState(false);
   const [pTitle, setPTitle] = useState("");
   const [pPrice, setPPrice] = useState("");
@@ -82,6 +125,31 @@ export default function ExploreScreen() {
     if (!s) return marketItems;
     return marketItems.filter((m) => m.title.toLowerCase().includes(s) || m.city.toLowerCase().includes(s));
   }, [marketItems, q]);
+
+  function handleConfirmCod() {
+    if (!codProduct) return;
+    if (!buyerName.trim() || !buyerPhone.trim()) {
+      Alert.alert("بيانات ناقصة", "يرجى إدخال اسمك ورقم هاتفك لتأكيد الطلب.");
+      return;
+    }
+    placeCodOrder({
+      productTitle: codProduct.title,
+      priceDzd: codProduct.priceDzd,
+      buyerName: buyerName.trim(),
+      phone: buyerPhone.trim(),
+      wilaya: buyerWilaya.trim() || "الجزائر",
+    });
+    const sellerDigits = (codProduct.phone || "").replace(/\D/g, "");
+    const intl = sellerDigits.startsWith("0") ? `213${sellerDigits.slice(1)}` : sellerDigits;
+    const msg = `🛍️ طلب جديد من SHAHINAZ:\nالمنتج: ${codProduct.title}\nالسعر: ${codProduct.priceDzd} دج (الدفع عند الاستلام)\nالاسم: ${buyerName}\nالهاتف: ${buyerPhone}\nالولاية: ${buyerWilaya}`;
+    setCodProduct(null);
+    setBuyerName("");
+    setBuyerPhone("");
+    Alert.alert("🎉 تم تسجيل طلبك!", "هل تريد إرسال تفاصيل الطلب للتاجر على واتساب للتوصيل السريع؟", [
+      { text: "لا، شكراً", style: "cancel" },
+      { text: "📲 إرسال لواتساب", onPress: () => Linking.openURL(`https://wa.me/${intl}?text=${encodeURIComponent(msg)}`) },
+    ]);
+  }
 
   function handleAddProduct() {
     const price = Number(pPrice);
@@ -109,8 +177,8 @@ export default function ExploreScreen() {
       <View style={styles.topTabs}>
         {[
           { key: "explore", label: "استكشاف" },
-          { key: "reels", label: "ريلز" },
-          { key: "groups", label: "مجموعات" },
+          { key: "reels", label: "ريلز تسوّق" },
+          { key: "rooms", label: "🎙️ صوتي" },
           { key: "market", label: "السوق" },
         ].map((t) => (
           <TouchableOpacity
@@ -123,7 +191,7 @@ export default function ExploreScreen() {
         ))}
       </View>
 
-      {mode !== "reels" && (
+      {mode !== "reels" && mode !== "rooms" && (
         <View style={styles.searchWrap}>
           <Ionicons name="search" size={18} color={COLORS.muted} />
           <TextInput
@@ -136,9 +204,21 @@ export default function ExploreScreen() {
         </View>
       )}
 
-      {/* EXPLORE: Instagram 3-Column Photo Grid */}
+      {/* EXPLORE: Weekly Challenge Banner + Instagram 3-Column Photo Grid */}
       {mode === "explore" && (
         <View style={{ flex: 1 }}>
+          <TouchableOpacity onPress={() => setChallengeOpen(true)} activeOpacity={0.85} style={{ marginHorizontal: 12, marginBottom: 10 }}>
+            <LinearGradient colors={["#6d28d9", "#db2777"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.challengeBanner}>
+              <View style={{ flex: 1, alignItems: "flex-end" }}>
+                <Text style={{ color: "#fde68a", fontSize: 11, fontWeight: "800" }}>🏆 تحدي الأسبوع في SHAHINAZ</Text>
+                <Text style={{ color: "#fff", fontSize: 13.5, fontWeight: "800", marginTop: 2 }}>
+                  أجمل صورة في ولايتك — الجائزة: تاج ذهبي 👑 وتوثيق!
+                </Text>
+              </View>
+              <Ionicons name="trophy" size={26} color="#fde68a" />
+            </LinearGradient>
+          </TouchableOpacity>
+
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -179,10 +259,10 @@ export default function ExploreScreen() {
         </View>
       )}
 
-      {/* REELS: Full-Screen Immersive TikTok/Instagram Style */}
+      {/* REELS + TIKTOK SHOP (58 WILAYA COD ORDER) */}
       {mode === "reels" && (
         <FlatList
-          data={DEMO_REELS}
+          data={SHOP_REELS}
           keyExtractor={(r) => r.id}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingHorizontal: 10, paddingBottom: 20, gap: 12 }}
@@ -191,11 +271,8 @@ export default function ExploreScreen() {
             return (
               <View style={styles.reelFull}>
                 <Image source={{ uri: item.imageUri }} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
-                <LinearGradient
-                  colors={["transparent", "rgba(0,0,0,0.85)"]}
-                  style={StyleSheet.absoluteFillObject}
-                />
-                {/* Floating Left Action Column */}
+                <LinearGradient colors={["transparent", "rgba(0,0,0,0.88)"]} style={StyleSheet.absoluteFillObject} />
+
                 <View style={styles.reelActions}>
                   <TouchableOpacity
                     style={styles.reelActionBtn}
@@ -217,7 +294,6 @@ export default function ExploreScreen() {
                   </View>
                 </View>
 
-                {/* Bottom Author & Caption */}
                 <View style={styles.reelFooter}>
                   <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 8, marginBottom: 6 }}>
                     <Image source={{ uri: item.avatarUri }} style={{ width: 34, height: 34, borderRadius: 17 }} />
@@ -225,6 +301,24 @@ export default function ExploreScreen() {
                     <Ionicons name="checkmark-circle" size={14} color={COLORS.verified} />
                   </View>
                   <Text style={styles.reelCaption}>{item.title}</Text>
+
+                  {item.priceDzd > 0 && (
+                    <TouchableOpacity
+                      style={styles.codCtaBtn}
+                      onPress={() =>
+                        setCodProduct({
+                          title: item.productTitle,
+                          priceDzd: item.priceDzd,
+                          phone: item.sellerPhone,
+                        })
+                      }
+                    >
+                      <Ionicons name="bag-handle" size={16} color="#fff" />
+                      <Text style={{ color: "#fff", fontWeight: "800", fontSize: 13 }}>
+                        اطلب الآن · {item.priceDzd.toLocaleString("fr-DZ")} دج (توصيل 58 ولاية)
+                      </Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               </View>
             );
@@ -232,34 +326,59 @@ export default function ExploreScreen() {
         />
       )}
 
-      {/* GROUPS */}
-      {mode === "groups" && (
-        <FlatList
-          data={groups}
-          keyExtractor={(g) => g.id}
-          contentContainerStyle={{ paddingHorizontal: 12, gap: 10 }}
-          renderItem={({ item }) => (
-            <View style={styles.darkRowCard}>
-              <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 12, flex: 1 }}>
-                <View style={styles.groupBadge}>
-                  <Text style={{ fontSize: 22 }}>{item.emoji}</Text>
-                </View>
-                <View style={{ alignItems: "flex-end", flex: 1 }}>
-                  <Text style={styles.cardTitle}>{item.name}</Text>
-                  <Text style={styles.cardSub}>{item.members.toLocaleString("fr-DZ")} عضو</Text>
-                </View>
-              </View>
+      {/* LIVE AUDIO ROOMS (غرف القعدة الصوتية) */}
+      {mode === "rooms" && (
+        <View style={{ flex: 1, paddingHorizontal: 12 }}>
+          <TouchableOpacity style={styles.sellBtn} onPress={() => setNewRoomOpen(true)}>
+            <Ionicons name="mic" size={18} color="#fff" />
+            <Text style={{ color: "#fff", fontWeight: "700", fontSize: 13 }}>+ افتح غرفة صوتية مباشرة الآن</Text>
+          </TouchableOpacity>
+
+          <FlatList
+            data={audioRooms}
+            keyExtractor={(r) => r.id}
+            contentContainerStyle={{ gap: 12, paddingBottom: 20 }}
+            renderItem={({ item }) => (
               <TouchableOpacity
-                style={[styles.joinBtn, item.joined && styles.joinedBtn]}
-                onPress={() => toggleJoinGroup(item.id)}
+                style={styles.roomCard}
+                activeOpacity={0.85}
+                onPress={() => {
+                  setMicOn(false);
+                  setHandRaised(false);
+                  setActiveRoom(item);
+                }}
               >
-                <Text style={{ color: "#fff", fontWeight: "700", fontSize: 12 }}>
-                  {item.joined ? "منضم ✓" : "انضمام"}
-                </Text>
+                <View style={{ flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center" }}>
+                  <View style={styles.liveBadge}>
+                    <View style={styles.liveDot} />
+                    <Text style={{ color: "#fff", fontSize: 10, fontWeight: "800" }}>مباشر · {item.listeners} مستمع</Text>
+                  </View>
+                  <Text style={{ color: COLORS.primary, fontSize: 11, fontWeight: "700" }}>{item.topic}</Text>
+                </View>
+                <Text style={styles.roomTitle}>{item.title}</Text>
+                <View style={{ flexDirection: "row-reverse", alignItems: "center", justifyContent: "space-between", marginTop: 10 }}>
+                  <View style={{ flexDirection: "row-reverse", gap: 8 }}>
+                    {item.speakers.map((sp, idx) => (
+                      <View key={idx} style={{ alignItems: "center" }}>
+                        {sp.avatarUri ? (
+                          <Image
+                            source={{ uri: sp.avatarUri }}
+                            style={[styles.speakerSmall, sp.speaking && { borderColor: COLORS.success, borderWidth: 2 }]}
+                          />
+                        ) : (
+                          <View style={styles.speakerSmallFallback}>
+                            <Ionicons name="person" size={16} color={COLORS.muted} />
+                          </View>
+                        )}
+                      </View>
+                    ))}
+                  </View>
+                  <Text style={{ color: COLORS.verified, fontWeight: "700", fontSize: 12 }}>دخول للاستماع ←</Text>
+                </View>
               </TouchableOpacity>
-            </View>
-          )}
-        />
+            )}
+          />
+        </View>
       )}
 
       {/* MARKETPLACE */}
@@ -301,25 +420,163 @@ export default function ExploreScreen() {
                   <Text style={styles.cardSub}>
                     📍 {item.city} · {item.sellerName} · {item.createdAt}
                   </Text>
-                  {!!item.phone && (
-                    <TouchableOpacity
-                      style={styles.waBtn}
-                      onPress={() => {
-                        const d = item.phone.replace(/\D/g, "");
-                        const intl = d.startsWith("0") ? `213${d.slice(1)}` : d;
-                        Linking.openURL(`https://wa.me/${intl}?text=${encodeURIComponent(`مرحباً، أنا مهتم بـ ${item.title} في SHAHINAZ`)}`);
-                      }}
-                    >
-                      <Ionicons name="logo-whatsapp" size={16} color="#fff" />
-                      <Text style={{ color: "#fff", fontWeight: "700", fontSize: 12 }}>تواصل عبر واتساب</Text>
-                    </TouchableOpacity>
-                  )}
+                  <TouchableOpacity
+                    style={styles.waBtn}
+                    onPress={() =>
+                      setCodProduct({
+                        title: item.title,
+                        priceDzd: item.priceDzd,
+                        phone: item.phone,
+                      })
+                    }
+                  >
+                    <Ionicons name="bag-handle-outline" size={16} color="#fff" />
+                    <Text style={{ color: "#fff", fontWeight: "700", fontSize: 12 }}>اطلب الآن — الدفع عند الاستلام</Text>
+                  </TouchableOpacity>
                 </View>
               </View>
             )}
           />
         </View>
       )}
+
+      {/* 58-Wilaya COD Order Modal */}
+      <Modal visible={!!codProduct} transparent animationType="slide" onRequestClose={() => setCodProduct(null)}>
+        <View style={styles.lightbox}>
+          {codProduct && (
+            <View style={styles.modalSheet}>
+              <Text style={styles.sheetTitle}>🛍️ طلب سريع — الدفع عند الاستلام</Text>
+              <Text style={{ color: COLORS.primary, fontWeight: "700", textAlign: "right", marginBottom: 10 }}>
+                {codProduct.title} · {codProduct.priceDzd.toLocaleString("fr-DZ")} دج
+              </Text>
+              <TextInput style={styles.input} placeholder="الاسم واللقب" placeholderTextColor={COLORS.muted} value={buyerName} onChangeText={setBuyerName} />
+              <TextInput style={styles.input} placeholder="رقم الهاتف (مثال: 0550...)" placeholderTextColor={COLORS.muted} keyboardType="phone-pad" value={buyerPhone} onChangeText={setBuyerPhone} />
+              <TextInput style={styles.input} placeholder="الولاية (58 ولاية)" placeholderTextColor={COLORS.muted} value={buyerWilaya} onChangeText={setBuyerWilaya} />
+              <View style={{ flexDirection: "row-reverse", gap: 8, marginTop: 6 }}>
+                <TouchableOpacity style={[styles.sellBtn, { flex: 1, marginBottom: 0 }]} onPress={handleConfirmCod}>
+                  <Text style={{ color: "#fff", fontWeight: "800" }}>تأكيد الطلب ✓</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.cancelBtn} onPress={() => setCodProduct(null)}>
+                  <Text style={{ color: COLORS.muted, fontWeight: "700" }}>إلغاء</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+        </View>
+      </Modal>
+
+      {/* Live Audio Room Interactive Stage Modal */}
+      <Modal visible={!!activeRoom} transparent animationType="slide" onRequestClose={() => setActiveRoom(null)}>
+        <View style={styles.lightbox}>
+          {activeRoom && (
+            <View style={styles.modalSheet}>
+              <View style={{ flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                <View style={styles.liveBadge}>
+                  <View style={styles.liveDot} />
+                  <Text style={{ color: "#fff", fontSize: 10, fontWeight: "800" }}>مباشر · {activeRoom.listeners + 1} متواجد</Text>
+                </View>
+                <TouchableOpacity onPress={() => setActiveRoom(null)}>
+                  <Text style={{ color: COLORS.danger, fontWeight: "700", fontSize: 13 }}>مغادرة الغرفة ✕</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.sheetTitle}>{activeRoom.title}</Text>
+
+              <View style={styles.stageGrid}>
+                {activeRoom.speakers.map((sp, i) => (
+                  <View key={i} style={{ alignItems: "center", width: 80 }}>
+                    {sp.avatarUri ? (
+                      <Image
+                        source={{ uri: sp.avatarUri }}
+                        style={[styles.stageAvatar, sp.speaking && { borderColor: COLORS.success, borderWidth: 3 }]}
+                      />
+                    ) : (
+                      <View style={styles.stageAvatarFallback}>
+                        <Ionicons name="person" size={28} color={COLORS.muted} />
+                      </View>
+                    )}
+                    <Text style={{ color: COLORS.text, fontSize: 12, fontWeight: "600", marginTop: 6 }}>{sp.name}</Text>
+                    <Text style={{ color: sp.speaking ? COLORS.success : COLORS.muted, fontSize: 10 }}>
+                      {sp.speaking ? "🎙️ يتحدث" : "مستمع"}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+
+              <View style={{ flexDirection: "row-reverse", gap: 10, marginTop: 18 }}>
+                <TouchableOpacity
+                  style={[styles.sellBtn, { flex: 1, marginBottom: 0, backgroundColor: micOn ? COLORS.success : COLORS.surface2 }]}
+                  onPress={() => setMicOn((v) => !v)}
+                >
+                  <Ionicons name={micOn ? "mic" : "mic-off"} size={18} color="#fff" />
+                  <Text style={{ color: "#fff", fontWeight: "700" }}>{micOn ? "الميكروفون مفتوح" : "كتم الصوت"}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.sellBtn, { flex: 1, marginBottom: 0, backgroundColor: handRaised ? COLORS.warn : COLORS.surface2 }]}
+                  onPress={() => setHandRaised((v) => !v)}
+                >
+                  <Text style={{ color: "#fff", fontWeight: "700" }}>{handRaised ? "✋ يدك مرفوعة" : "✋ اطلب الكلمة"}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+        </View>
+      </Modal>
+
+      {/* Create Live Audio Room Modal */}
+      <Modal visible={newRoomOpen} transparent animationType="fade" onRequestClose={() => setNewRoomOpen(false)}>
+        <View style={styles.lightbox}>
+          <View style={styles.modalSheet}>
+            <Text style={styles.sheetTitle}>🎙️ افتح غرفة صوتية جديدة</Text>
+            <TextInput style={styles.input} placeholder="عنوان الغرفة (مثال: سهرة التجارة والعمل)" placeholderTextColor={COLORS.muted} value={roomTitle} onChangeText={setRoomTitle} />
+            <TextInput style={styles.input} placeholder="الموضوع (تجارة، كرة، تسلية...)" placeholderTextColor={COLORS.muted} value={roomTopic} onChangeText={setRoomTopic} />
+            <View style={{ flexDirection: "row-reverse", gap: 8 }}>
+              <TouchableOpacity
+                style={[styles.sellBtn, { flex: 1, marginBottom: 0 }]}
+                onPress={() => {
+                  createAudioRoom(roomTitle, roomTopic);
+                  setRoomTitle("");
+                  setRoomTopic("");
+                  setNewRoomOpen(false);
+                }}
+              >
+                <Text style={{ color: "#fff", fontWeight: "700" }}>بدء الغرفة الآن</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => setNewRoomOpen(false)}>
+                <Text style={{ color: COLORS.muted }}>إلغاء</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Weekly Challenge & Top 3 Leaderboard Modal */}
+      <Modal visible={challengeOpen} transparent animationType="fade" onRequestClose={() => setChallengeOpen(false)}>
+        <View style={styles.lightbox}>
+          <View style={styles.modalSheet}>
+            <Text style={styles.sheetTitle}>🏆 متصدرو تحدي الأسبوع</Text>
+            <Text style={{ color: COLORS.muted, fontSize: 12, textAlign: "right", marginBottom: 14 }}>
+              انشر صورة من ولايتك بهاشتاق #تحدي_الأسبوع لتربح تاج 👑 وتوثيقاً مجانياً!
+            </Text>
+            {LEADERBOARD.map((u) => (
+              <View key={u.rank} style={styles.leaderRow}>
+                <Text style={{ color: COLORS.warn, fontWeight: "800", fontSize: 16 }}>#{u.rank}</Text>
+                <Image source={{ uri: u.avatarUri }} style={{ width: 42, height: 42, borderRadius: 21 }} />
+                <View style={{ flex: 1, alignItems: "flex-end" }}>
+                  <Text style={{ color: COLORS.text, fontWeight: "700" }}>
+                    {u.rank === 1 ? "👑 " : ""}
+                    {u.name}
+                  </Text>
+                  <Text style={{ color: COLORS.muted, fontSize: 11 }}>{u.wilaya}</Text>
+                </View>
+                <Text style={{ color: COLORS.primary, fontWeight: "800" }}>{u.points} نقطة</Text>
+              </View>
+            ))}
+            <TouchableOpacity style={[styles.sellBtn, { marginTop: 12, marginBottom: 0 }]} onPress={() => setChallengeOpen(false)}>
+              <Text style={{ color: "#fff", fontWeight: "700" }}>حسناً</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* Grid Photo Lightbox Modal */}
       <Modal visible={!!previewPost} transparent animationType="fade" onRequestClose={() => setPreviewPost(null)}>
@@ -348,13 +605,7 @@ export default function ExploreScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bg },
-  topTabs: {
-    flexDirection: "row-reverse",
-    paddingHorizontal: 12,
-    paddingTop: 10,
-    paddingBottom: 8,
-    gap: 8,
-  },
+  topTabs: { flexDirection: "row-reverse", paddingHorizontal: 12, paddingTop: 10, paddingBottom: 8, gap: 6 },
   tabPill: {
     flex: 1,
     paddingVertical: 8,
@@ -365,7 +616,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
   },
   tabPillActive: { backgroundColor: COLORS.text, borderColor: COLORS.text },
-  tabPillText: { color: COLORS.muted, fontSize: 12, fontWeight: "700" },
+  tabPillText: { color: COLORS.muted, fontSize: 11.5, fontWeight: "700" },
   tabPillTextActive: { color: "#000000" },
   searchWrap: {
     flexDirection: "row-reverse",
@@ -378,6 +629,13 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   searchInput: { flex: 1, color: COLORS.text, paddingVertical: 9, fontSize: 13.5, textAlign: "right" },
+  challengeBanner: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 12,
+    padding: 14,
+    borderRadius: 14,
+  },
   tagChip: {
     backgroundColor: COLORS.surface,
     borderWidth: 0.5,
@@ -391,40 +649,47 @@ const styles = StyleSheet.create({
   gridTile: { width: GRID_SIZE, height: GRID_SIZE, backgroundColor: COLORS.surface },
   gridImg: { width: "100%", height: "100%", justifyContent: "center", alignItems: "center", padding: 8 },
   gridTextOnly: { color: "#fff", fontSize: 11, fontWeight: "700", textAlign: "center" },
-  reelFull: {
-    height: 520,
-    borderRadius: 20,
-    overflow: "hidden",
-    backgroundColor: COLORS.surface,
-    justifyContent: "flex-end",
-  },
-  reelActions: { position: "absolute", left: 14, bottom: 26, alignItems: "center", gap: 18 },
+  reelFull: { height: 530, borderRadius: 20, overflow: "hidden", backgroundColor: COLORS.surface, justifyContent: "flex-end" },
+  reelActions: { position: "absolute", left: 14, bottom: 32, alignItems: "center", gap: 18 },
   reelActionBtn: { alignItems: "center", gap: 4 },
   reelStat: { color: "#fff", fontSize: 12, fontWeight: "700" },
-  reelFooter: { padding: 18, paddingLeft: 64, alignItems: "flex-end" },
-  reelCaption: { color: "#fff", fontSize: 14, fontWeight: "600", textAlign: "right", lineHeight: 22 },
-  darkRowCard: {
+  reelFooter: { padding: 16, paddingLeft: 64, alignItems: "flex-end" },
+  reelCaption: { color: "#fff", fontSize: 14, fontWeight: "600", textAlign: "right", lineHeight: 21 },
+  codCtaBtn: {
+    marginTop: 12,
     flexDirection: "row-reverse",
     alignItems: "center",
-    justifyContent: "space-between",
+    gap: 6,
+    backgroundColor: "#16a34a",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  roomCard: {
     backgroundColor: COLORS.surface,
-    padding: 12,
-    borderRadius: 14,
+    borderRadius: 16,
+    padding: 16,
     borderWidth: 0.5,
     borderColor: COLORS.border,
   },
-  groupBadge: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: COLORS.surface2,
+  liveBadge: {
+    flexDirection: "row-reverse",
     alignItems: "center",
-    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "rgba(239,68,68,0.22)",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
   },
+  liveDot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: COLORS.danger },
+  roomTitle: { color: COLORS.text, fontSize: 16, fontWeight: "800", textAlign: "right", marginTop: 10 },
+  speakerSmall: { width: 38, height: 38, borderRadius: 19 },
+  speakerSmallFallback: { width: 38, height: 38, borderRadius: 19, backgroundColor: COLORS.surface2, alignItems: "center", justifyContent: "center" },
+  stageGrid: { flexDirection: "row-reverse", flexWrap: "wrap", gap: 14, justifyContent: "center", marginTop: 12 },
+  stageAvatar: { width: 64, height: 64, borderRadius: 32 },
+  stageAvatarFallback: { width: 64, height: 64, borderRadius: 32, backgroundColor: COLORS.surface2, alignItems: "center", justifyContent: "center" },
   cardTitle: { color: COLORS.text, fontWeight: "700", fontSize: 14, textAlign: "right" },
   cardSub: { color: COLORS.muted, fontSize: 12, textAlign: "right", marginTop: 3 },
-  joinBtn: { backgroundColor: COLORS.verified, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 },
-  joinedBtn: { backgroundColor: COLORS.surface2 },
   sellBtn: {
     flexDirection: "row-reverse",
     justifyContent: "center",
@@ -435,29 +700,10 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 10,
   },
-  formCard: {
-    backgroundColor: COLORS.surface,
-    padding: 12,
-    borderRadius: 14,
-    marginBottom: 12,
-    borderWidth: 0.5,
-    borderColor: COLORS.border,
-  },
-  input: {
-    backgroundColor: COLORS.surface2,
-    borderRadius: 10,
-    padding: 10,
-    color: COLORS.text,
-    textAlign: "right",
-    marginBottom: 8,
-  },
-  marketCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 16,
-    overflow: "hidden",
-    borderWidth: 0.5,
-    borderColor: COLORS.border,
-  },
+  cancelBtn: { backgroundColor: COLORS.surface2, borderRadius: 12, paddingHorizontal: 16, justifyContent: "center" },
+  formCard: { backgroundColor: COLORS.surface, padding: 12, borderRadius: 14, marginBottom: 12, borderWidth: 0.5, borderColor: COLORS.border },
+  input: { backgroundColor: COLORS.surface2, borderRadius: 10, padding: 11, color: COLORS.text, textAlign: "right", marginBottom: 8 },
+  marketCard: { backgroundColor: COLORS.surface, borderRadius: 16, overflow: "hidden", borderWidth: 0.5, borderColor: COLORS.border },
   marketImg: { width: "100%", height: 190 },
   waBtn: {
     flexDirection: "row-reverse",
@@ -469,7 +715,17 @@ const styles = StyleSheet.create({
     padding: 10,
     marginTop: 10,
   },
-  lightbox: { flex: 1, backgroundColor: "rgba(0,0,0,0.88)", justifyContent: "center", padding: 18 },
+  lightbox: { flex: 1, backgroundColor: "rgba(0,0,0,0.85)", justifyContent: "center", padding: 18 },
   lightboxCard: { backgroundColor: COLORS.surface, borderRadius: 18, overflow: "hidden", borderWidth: 0.5, borderColor: COLORS.border },
   lightboxImg: { width: "100%", height: 320 },
+  modalSheet: { backgroundColor: COLORS.surface, borderRadius: 20, padding: 18, borderWidth: 0.5, borderColor: COLORS.border },
+  sheetTitle: { color: COLORS.text, fontSize: 17, fontWeight: "800", textAlign: "right", marginBottom: 10 },
+  leaderRow: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 10,
+    borderBottomWidth: 0.5,
+    borderBottomColor: COLORS.border,
+  },
 });

@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { apiFetch } from "../services/api";
-import type { ChatThread, GroupItem, MarketItem, NotificationItem, Post, ReactionEmoji, Story, User } from "../types";
+import type { AudioRoom, ChatThread, CodOrder, GroupItem, MarketItem, NoteItem, NotificationItem, Post, ReactionEmoji, Story, User } from "../types";
 
 export interface ReportItem {
   id: string;
@@ -21,6 +21,9 @@ interface AppContextValue {
   notifications: NotificationItem[];
   marketItems: MarketItem[];
   groups: GroupItem[];
+  notes: NoteItem[];
+  audioRooms: AudioRoom[];
+  codOrders: CodOrder[];
   chats: ChatThread[];
   accentColor: string;
   blockedUserIds: string[];
@@ -49,6 +52,9 @@ interface AppContextValue {
   markAllNotificationsRead: () => void;
   addMarketItem: (item: Omit<MarketItem, "id" | "sellerName" | "createdAt">) => void;
   toggleJoinGroup: (groupId: string) => void;
+  setMyNote: (text: string) => void;
+  createAudioRoom: (title: string, topic: string) => void;
+  placeCodOrder: (order: Omit<CodOrder, "id" | "createdAt">) => void;
   reportPost: (postId: string, reason: string) => void;
   blockUser: (userId: string) => void;
   unblockUser: (userId: string) => void;
@@ -265,6 +271,41 @@ const INITIAL_GROUPS: GroupItem[] = [
   { id: "gr_4", name: "طبخ وحلويات جزائرية", emoji: "🍰", members: 15200, joined: false },
 ];
 
+const INITIAL_NOTES: NoteItem[] = [
+  { id: "nt_1", userId: "u_1", userName: "ياسين", avatarUri: DEMO_USERS[0].avatarUri, avatarEmoji: "🧔🏻", text: "قهوة المساء ☕🇩🇿" },
+  { id: "nt_2", userId: "u_2", userName: "سارة", avatarUri: DEMO_USERS[1].avatarUri, avatarEmoji: "👩🏻‍🎨", text: "شكون راه صاحي؟ ✨" },
+  { id: "nt_3", userId: "u_3", userName: "كريم", avatarUri: DEMO_USERS[2].avatarUri, avatarEmoji: "👨🏻‍💻", text: "مشروع جديد قريباً 🚀" },
+  { id: "nt_4", userId: "u_4", userName: "أمين", avatarUri: DEMO_USERS[3].avatarUri, avatarEmoji: "📷", text: "خارج للتصوير 📸" },
+];
+
+const INITIAL_AUDIO_ROOMS: AudioRoom[] = [
+  {
+    id: "ar_1",
+    title: "أسرار التجارة الإلكترونية في 58 ولاية 🚀",
+    hostName: "كريم تكنولوجي",
+    hostAvatarUri: DEMO_USERS[2].avatarUri,
+    topic: "تجارة وأعمال",
+    listeners: 148,
+    speakers: [
+      { name: "كريم", avatarUri: DEMO_USERS[2].avatarUri, speaking: true },
+      { name: "ياسين", avatarUri: DEMO_USERS[0].avatarUri, speaking: false },
+      { name: "سارة", avatarUri: DEMO_USERS[1].avatarUri, speaking: false },
+    ],
+  },
+  {
+    id: "ar_2",
+    title: "قعدة وسهرة جزائرية مفتوحة 🎙️☕",
+    hostName: "سارة منصوري",
+    hostAvatarUri: DEMO_USERS[1].avatarUri,
+    topic: "دردشة وتسلية",
+    listeners: 94,
+    speakers: [
+      { name: "سارة", avatarUri: DEMO_USERS[1].avatarUri, speaking: true },
+      { name: "أمين", avatarUri: DEMO_USERS[3].avatarUri, speaking: false },
+    ],
+  },
+];
+
 const AppContext = createContext<AppContextValue | null>(null);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
@@ -277,6 +318,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [notifications, setNotifications] = useState<NotificationItem[]>(INITIAL_NOTIFS);
   const [marketItems, setMarketItems] = useState<MarketItem[]>(INITIAL_MARKET);
   const [groups, setGroups] = useState<GroupItem[]>(INITIAL_GROUPS);
+  const [notes, setNotes] = useState<NoteItem[]>(INITIAL_NOTES);
+  const [audioRooms, setAudioRooms] = useState<AudioRoom[]>(INITIAL_AUDIO_ROOMS);
+  const [codOrders, setCodOrders] = useState<CodOrder[]>([]);
   const [chats, setChats] = useState<ChatThread[]>(INITIAL_CHATS);
   const [accentColor, setAccentColor] = useState<string>("#8b5cf6");
   const [blockedUserIds, setBlockedUserIds] = useState<string[]>([]);
@@ -653,6 +697,57 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setMaintenanceMode((v) => !v);
   }
 
+  function setMyNote(text: string) {
+    if (!currentUser) return;
+    const clean = text.trim();
+    if (!clean) {
+      setNotes((prev) => prev.filter((n) => n.userId !== currentUser.id));
+      return;
+    }
+    setNotes((prev) => {
+      const withoutMe = prev.filter((n) => n.userId !== currentUser.id);
+      return [
+        {
+          id: `nt_me_${Date.now()}`,
+          userId: currentUser.id,
+          userName: currentUser.name,
+          avatarUri: currentUser.avatarUri,
+          avatarEmoji: currentUser.avatarEmoji,
+          text: clean,
+        },
+        ...withoutMe,
+      ];
+    });
+  }
+
+  function createAudioRoom(title: string, topic: string) {
+    if (!currentUser || !title.trim()) return;
+    const room: AudioRoom = {
+      id: `ar_${Date.now()}`,
+      title: title.trim(),
+      hostName: currentUser.name,
+      hostAvatarUri: currentUser.avatarUri,
+      topic: topic.trim() || "دردشة مباشرة",
+      listeners: 1,
+      speakers: [{ name: currentUser.name, avatarUri: currentUser.avatarUri, speaking: true }],
+    };
+    setAudioRooms((prev) => [room, ...prev]);
+  }
+
+  function placeCodOrder(order: Omit<CodOrder, "id" | "createdAt">) {
+    setCodOrders((prev) => [{ ...order, id: `ord_${Date.now()}`, createdAt: "الآن" }, ...prev]);
+    setNotifications((prev) => [
+      {
+        id: `n_ord_${Date.now()}`,
+        emoji: "🛍️",
+        text: `تم تأكيد طلبك: ${order.productTitle} (التوصيل إلى ${order.wilaya})`,
+        time: "الآن",
+        read: false,
+      },
+      ...prev,
+    ]);
+  }
+
   function adminToggleRegistration() {
     setAllowRegistration((v) => !v);
   }
@@ -670,6 +765,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         notifications,
         marketItems,
         groups,
+        notes,
+        audioRooms,
+        codOrders,
         chats: chats.filter((c) => !blockedUserIds.includes(c.user.id)),
         accentColor,
         blockedUserIds,
@@ -698,6 +796,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         markAllNotificationsRead,
         addMarketItem,
         toggleJoinGroup,
+        setMyNote,
+        createAudioRoom,
+        placeCodOrder,
         reportPost,
         blockUser,
         unblockUser,

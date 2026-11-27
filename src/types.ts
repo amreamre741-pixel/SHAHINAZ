@@ -94,3 +94,32 @@ export interface ChatThread {
   unread: number;
   messages: { id: string; fromMe: boolean; text: string; time: string }[];
 }
+
+export interface NoteItem {
+  id: string;
+  userId: string;
+  userName: string;
+  avatarUri?: string;
+  avatarEmoji: string;
+  text: string;
+}
+
+export interface AudioRoom {
+  id: string;
+  title: string;
+  hostName: string;
+  hostAvatarUri?: string;
+  topic: string;
+  listeners: number;
+  speakers: { name: string; avatarUri?: string; speaking?: boolean }[];
+}
+
+export interface CodOrder {
+  id: string;
+  productTitle: string;
+  priceDzd: number;
+  buyerName: string;
+  phone: string;
+  wilaya: string;
+  createdAt: string;
+}
