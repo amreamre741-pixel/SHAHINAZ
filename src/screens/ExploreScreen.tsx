@@ -12,8 +12,8 @@ const DEMO_REELS = [
 ];
 
 export default function ExploreScreen() {
-  const { posts, marketItems, addMarketItem } = useApp();
-  const [mode, setMode] = useState<"explore" | "reels" | "market">("explore");
+  const { posts, marketItems, groups, addMarketItem, toggleJoinGroup } = useApp();
+  const [mode, setMode] = useState<"explore" | "reels" | "groups" | "market">("explore");
   const [q, setQ] = useState("");
   const [likedReels, setLikedReels] = useState<string[]>([]);
   const [addingProduct, setAddingProduct] = useState(false);
@@ -75,12 +75,45 @@ export default function ExploreScreen() {
           <Text style={[styles.switchText, mode === "reels" && styles.switchTextActive]}>🎬 ريلز</Text>
         </TouchableOpacity>
         <TouchableOpacity
+          style={[styles.switchBtn, mode === "groups" && styles.switchActive]}
+          onPress={() => setMode("groups")}
+        >
+          <Text style={[styles.switchText, mode === "groups" && styles.switchTextActive]}>👥 مجموعات</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
           style={[styles.switchBtn, mode === "market" && styles.switchActive]}
           onPress={() => setMode("market")}
         >
           <Text style={[styles.switchText, mode === "market" && styles.switchTextActive]}>🛒 السوق</Text>
         </TouchableOpacity>
       </View>
+
+      {mode === "groups" && (
+        <FlatList
+          data={groups}
+          keyExtractor={(g) => g.id}
+          renderItem={({ item }) => (
+            <View style={styles.card}>
+              <View style={{ flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center" }}>
+                <View style={{ alignItems: "flex-end" }}>
+                  <Text style={styles.author}>
+                    {item.emoji} {item.name}
+                  </Text>
+                  <Text style={styles.meta}>{item.members.toLocaleString("fr-DZ")} عضو</Text>
+                </View>
+                <TouchableOpacity
+                  style={[styles.addBtn, { marginBottom: 0, paddingHorizontal: 14, backgroundColor: item.joined ? COLORS.surface2 : COLORS.primary }]}
+                  onPress={() => toggleJoinGroup(item.id)}
+                >
+                  <Text style={{ color: "#fff", fontWeight: "700", fontSize: 12 }}>
+                    {item.joined ? "✓ منضم" : "+ انضمام"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+        />
+      )}
 
       {mode !== "reels" && (
         <TextInput

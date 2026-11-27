@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState } from "react";
-import type { ChatThread, MarketItem, NotificationItem, Post, Story, User } from "../types";
+import type { ChatThread, GroupItem, MarketItem, NotificationItem, Post, ReactionEmoji, Story, User } from "../types";
 
 export interface ReportItem {
   id: string;
@@ -16,7 +16,9 @@ interface AppContextValue {
   stories: Story[];
   notifications: NotificationItem[];
   marketItems: MarketItem[];
+  groups: GroupItem[];
   chats: ChatThread[];
+  accentColor: string;
   blockedUserIds: string[];
   reportedPostIds: string[];
   reports: ReportItem[];
@@ -27,7 +29,10 @@ interface AppContextValue {
   logout: () => void;
   deleteAccount: () => void;
   updateProfile: (name: string, bio: string, avatarUri?: string) => void;
+  togglePrivateAccount: () => void;
+  setAccentColor: (color: string) => void;
   toggleLike: (postId: string) => void;
+  setReaction: (postId: string, emoji: ReactionEmoji) => void;
   toggleSave: (postId: string) => void;
   addComment: (postId: string, text: string) => void;
   createPost: (content: string, imageUri?: string, location?: string, bgColor?: string, pollOptions?: string[]) => void;
@@ -36,11 +41,13 @@ interface AppContextValue {
   markStorySeen: (storyId: string) => void;
   markAllNotificationsRead: () => void;
   addMarketItem: (item: Omit<MarketItem, "id" | "sellerName" | "createdAt">) => void;
+  toggleJoinGroup: (groupId: string) => void;
   reportPost: (postId: string, reason: string) => void;
   blockUser: (userId: string) => void;
   unblockUser: (userId: string) => void;
   sendMessage: (chatId: string, text: string) => void;
   adminDeletePost: (postId: string) => void;
+  adminToggleSponsor: (postId: string) => void;
   adminDismissReport: (reportId: string) => void;
   adminToggleVerify: (userId: string) => void;
   adminSetAnnouncement: (text: string) => void;
@@ -119,6 +126,13 @@ const INITIAL_CHATS: ChatThread[] = [
   },
 ];
 
+const INITIAL_GROUPS: GroupItem[] = [
+  { id: "gr_1", name: "التجارة الإلكترونية في الجزائر", emoji: "🚀", members: 12400, joined: true },
+  { id: "gr_2", name: "عشاق السيارات والشاحنات DZ", emoji: "🚗", members: 8900, joined: false },
+  { id: "gr_3", name: "تقنية وبرمجة وهواتف", emoji: "💻", members: 6300, joined: false },
+  { id: "gr_4", name: "طبخ وحلويات جزائرية", emoji: "🍰", members: 15200, joined: false },
+];
+
 const AppContext = createContext<AppContextValue | null>(null);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
@@ -128,7 +142,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [stories, setStories] = useState<Story[]>(INITIAL_STORIES);
   const [notifications, setNotifications] = useState<NotificationItem[]>(INITIAL_NOTIFS);
   const [marketItems, setMarketItems] = useState<MarketItem[]>(INITIAL_MARKET);
+  const [groups, setGroups] = useState<GroupItem[]>(INITIAL_GROUPS);
   const [chats, setChats] = useState<ChatThread[]>(INITIAL_CHATS);
+  const [accentColor, setAccentColor] = useState<string>("#8b5cf6");
   const [blockedUserIds, setBlockedUserIds] = useState<string[]>([]);
   const [reportedPostIds, setReportedPostIds] = useState<string[]>([]);
   const [reports, setReports] = useState<ReportItem[]>([]);
@@ -144,9 +160,42 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       bio: "عضو جديد في مجتمع SHAHINAZ ✨",
       avatarEmoji: "🌟",
       verified: true,
+      isPrivate: false,
+      points: 150,
       followers: 12,
       following: 24,
     });
+  }
+
+  function togglePrivateAccount() {
+    setCurrentUser((prev) => (prev ? { ...prev, isPrivate: !prev.isPrivate } : prev));
+  }
+
+  function setReaction(postId: string, emoji: ReactionEmoji) {
+    setPosts((prev) =>
+      prev.map((p) => {
+        if (p.id !== postId) return p;
+        const same = p.myReaction === emoji;
+        return {
+          ...p,
+          myReaction: same ? null : emoji,
+          likedByMe: !same,
+          likes: same ? Math.max(0, p.likes - 1) : p.likedByMe ? p.likes : p.likes + 1,
+        };
+      })
+    );
+  }
+
+  function toggleJoinGroup(groupId: string) {
+    setGroups((prev) =>
+      prev.map((g) =>
+        g.id === groupId ? { ...g, joined: !g.joined, members: g.joined ? g.members - 1 : g.members + 1 } : g
+      )
+    );
+  }
+
+  function adminToggleSponsor(postId: string) {
+    setPosts((prev) => prev.map((p) => (p.id === postId ? { ...p, isSponsored: !p.isSponsored } : p)));
   }
 
   function logout() {
@@ -358,7 +407,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         stories,
         notifications,
         marketItems,
+        groups,
         chats: chats.filter((c) => !blockedUserIds.includes(c.user.id)),
+        accentColor,
         blockedUserIds,
         reportedPostIds,
         reports,
@@ -369,7 +420,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         logout,
         deleteAccount,
         updateProfile,
+        togglePrivateAccount,
+        setAccentColor,
         toggleLike,
+        setReaction,
         toggleSave,
         addComment,
         createPost,
@@ -378,11 +432,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         markStorySeen,
         markAllNotificationsRead,
         addMarketItem,
+        toggleJoinGroup,
         reportPost,
         blockUser,
         unblockUser,
         sendMessage,
         adminDeletePost,
+        adminToggleSponsor,
         adminDismissReport,
         adminToggleVerify,
         adminSetAnnouncement,

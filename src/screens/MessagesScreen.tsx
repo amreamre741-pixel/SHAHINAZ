@@ -32,6 +32,18 @@ export default function MessagesScreen() {
           )}
         />
         <View style={styles.inputRow}>
+          <TouchableOpacity
+            style={styles.mediaBtn}
+            onPress={() => sendMessage(activeChat.id, "🎙️ رسالة صوتية (0:08)")}
+          >
+            <Text style={{ fontSize: 16 }}>🎙️</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.mediaBtn}
+            onPress={() => sendMessage(activeChat.id, "📷 صورة مرفقة")}
+          >
+            <Text style={{ fontSize: 16 }}>📷</Text>
+          </TouchableOpacity>
           <TextInput
             style={styles.input}
             placeholder="اكتب رسالة..."
@@ -126,4 +138,5 @@ const styles = StyleSheet.create({
     textAlign: "right",
   },
   sendBtn: { backgroundColor: COLORS.primary, borderRadius: 12, paddingHorizontal: 16, justifyContent: "center" },
+  mediaBtn: { backgroundColor: COLORS.surface, borderRadius: 12, paddingHorizontal: 10, justifyContent: "center", borderWidth: 1, borderColor: COLORS.border },
 });

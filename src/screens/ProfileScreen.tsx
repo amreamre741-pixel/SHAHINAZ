@@ -122,7 +122,39 @@ export default function ProfileScreen() {
       </View>
 
       <View style={styles.section}>
+        <Text style={styles.sectionTitle}>⭐ نقاطك ومستواك VIP</Text>
+        <Text style={styles.settingText}>
+          رصيد النقاط: {currentUser.points ?? 150} نقطة · المستوى: ذهبي 🏆
+        </Text>
+      </View>
+
+      <View style={[styles.section, { marginTop: 12 }]}>
+        <Text style={styles.sectionTitle}>🔖 المنشورات المحفوظة ({posts.filter((p) => p.savedByMe).length})</Text>
+        {posts.filter((p) => p.savedByMe).length === 0 ? (
+          <Text style={styles.settingText}>لم تحفظ أي منشورات بعد.</Text>
+        ) : (
+          posts
+            .filter((p) => p.savedByMe)
+            .map((sp) => (
+              <View key={sp.id} style={{ backgroundColor: COLORS.surface2, padding: 10, borderRadius: 10 }}>
+                <Text style={{ color: COLORS.primary, fontWeight: "700", fontSize: 12, textAlign: "right" }}>
+                  {sp.author.name}
+                </Text>
+                <Text style={{ color: COLORS.text, fontSize: 12, textAlign: "right", marginTop: 2 }} numberOfLines={2}>
+                  {sp.content}
+                </Text>
+              </View>
+            ))
+        )}
+      </View>
+
+      <View style={[styles.section, { marginTop: 12, marginBottom: 24 }]}>
         <Text style={styles.sectionTitle}>⚙️ الإعدادات والخصوصية (Google Play)</Text>
+        <View style={styles.settingRow}>
+          <Text style={styles.settingText}>
+            🔒 حالة الحساب: {currentUser.isPrivate ? "حساب خاص (Private)" : "حساب عام (Public)"}
+          </Text>
+        </View>
         <View style={styles.settingRow}>
           <Text style={styles.settingText}>🚫 المستخدمون المحظورون: {blockedUserIds.length}</Text>
         </View>

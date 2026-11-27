@@ -6,6 +6,8 @@ export interface User {
   avatarEmoji: string;
   avatarUri?: string;
   verified?: boolean;
+  isPrivate?: boolean;
+  points?: number;
   followers: number;
   following: number;
 }
@@ -24,6 +26,8 @@ export interface PollOption {
   votes: number;
 }
 
+export type ReactionEmoji = "❤️" | "🔥" | "😂" | "😮" | "😢";
+
 export interface Post {
   id: string;
   author: User;
@@ -31,6 +35,8 @@ export interface Post {
   imageUri?: string;
   location?: string;
   bgColor?: string;
+  isSponsored?: boolean;
+  myReaction?: ReactionEmoji | null;
   poll?: {
     options: PollOption[];
     votedOptionId?: string;
@@ -40,6 +46,14 @@ export interface Post {
   savedByMe: boolean;
   comments: Comment[];
   createdAt: string;
+}
+
+export interface GroupItem {
+  id: string;
+  name: string;
+  emoji: string;
+  members: number;
+  joined: boolean;
 }
 
 export interface Story {

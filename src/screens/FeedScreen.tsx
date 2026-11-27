@@ -14,6 +14,7 @@ export default function FeedScreen() {
     notifications,
     announcement,
     toggleLike,
+    setReaction,
     toggleSave,
     addComment,
     votePoll,
@@ -206,10 +207,35 @@ export default function FeedScreen() {
               </View>
             )}
 
+            <View style={{ flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", paddingBottom: 8 }}>
+              <View style={{ flexDirection: "row-reverse", gap: 6 }}>
+                {(["❤️", "🔥", "😂", "😮", "😢"] as const).map((em) => (
+                  <TouchableOpacity
+                    key={em}
+                    style={{
+                      backgroundColor: item.myReaction === em ? "rgba(139,92,246,0.25)" : COLORS.surface2,
+                      borderRadius: 999,
+                      paddingHorizontal: 8,
+                      paddingVertical: 3,
+                    }}
+                    onPress={() => setReaction(item.id, em)}
+                  >
+                    <Text style={{ fontSize: 14 }}>{em}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              {item.isSponsored && (
+                <Text style={{ color: COLORS.warn, fontSize: 11, fontWeight: "700" }}>⭐ مموّل</Text>
+              )}
+            </View>
+
             <View style={styles.actionsRow}>
               <TouchableOpacity style={styles.actionBtn} onPress={() => toggleLike(item.id)}>
                 <Ionicons name={item.likedByMe ? "heart" : "heart-outline"} size={21} color={item.likedByMe ? "#f43f5e" : COLORS.muted} />
-                <Text style={[styles.actionText, item.likedByMe && { color: "#f43f5e" }]}>{item.likes}</Text>
+                <Text style={[styles.actionText, item.likedByMe && { color: "#f43f5e" }]}>
+                  {item.myReaction ? `${item.myReaction} ` : ""}
+                  {item.likes}
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.actionBtn}
