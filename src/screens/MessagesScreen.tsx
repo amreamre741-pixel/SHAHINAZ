@@ -23,9 +23,11 @@ import VoiceMessagePlayer from "../components/VoiceMessagePlayer";
 import FriendsModal from "../components/FriendsModal";
 
 const QUICK_REPLIES = [
-  "مرحباً! 👋",
+  "سلام 👋",
+  "واش راك؟ 😊",
   "السعر من فضلك؟ 💰",
   "هل التوصيل متوفر لولايتي؟ 🚚",
+  "يعطيك الصحة 🔥",
   "تم التأكيد، شكراً! ✨",
 ];
 
@@ -54,6 +56,8 @@ export default function MessagesScreen() {
   const [replyText, setReplyText] = useState("");
   const [recording, setRecording] = useState(false);
   const [recSeconds, setRecSeconds] = useState(0);
+  const [uploadingMedia, setUploadingMedia] = useState(false);
+  const [zoomImageUri, setZoomImageUri] = useState<string | null>(null);
   const recTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const recordingObjRef = useRef<Audio.Recording | null>(null);
 
@@ -98,8 +102,35 @@ export default function MessagesScreen() {
       quality: 0.65,
     });
     if (!res.canceled && res.assets[0]?.uri) {
-      const uploadedUrl = await uploadMediaFile(res.assets[0].uri, "image/jpeg", token);
-      sendMessage(activeChat.id, "", uploadedUrl);
+      setUploadingMedia(true);
+      try {
+        const uploadedUrl = await uploadMediaFile(res.assets[0].uri, "image/jpeg", token);
+        sendMessage(activeChat.id, "", uploadedUrl);
+      } finally {
+        setUploadingMedia(false);
+      }
+    }
+  }
+
+  async function handleTakeChatPhoto() {
+    if (!activeChat) return;
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert("صلاحية الكاميرا مطلوبة", "يرجى السماح بالوصول إلى الكاميرا لالتقاط صورة وإرسالها.");
+      return;
+    }
+    const res = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.65,
+    });
+    if (!res.canceled && res.assets[0]?.uri) {
+      setUploadingMedia(true);
+      try {
+        const uploadedUrl = await uploadMediaFile(res.assets[0].uri, "image/jpeg", token);
+        sendMessage(activeChat.id, "", uploadedUrl);
+      } finally {
+        setUploadingMedia(false);
+      }
     }
   }
 
@@ -232,7 +263,9 @@ export default function MessagesScreen() {
                 style={[styles.bubble, styles.bubbleMe]}
               >
                 {!!item.imageUri && (
-                  <Image source={{ uri: item.imageUri }} style={styles.chatImgBubble} resizeMode="cover" />
+                  <TouchableOpacity activeOpacity={0.9} onPress={() => setZoomImageUri(item.imageUri!)}>
+                    <Image source={{ uri: item.imageUri }} style={styles.chatImgBubble} resizeMode="cover" />
+                  </TouchableOpacity>
                 )}
                 {!!item.audioUri && (
                   <VoiceMessagePlayer
@@ -254,7 +287,9 @@ export default function MessagesScreen() {
             ) : (
               <View style={[styles.bubble, styles.bubbleOther, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                 {!!item.imageUri && (
-                  <Image source={{ uri: item.imageUri }} style={styles.chatImgBubble} resizeMode="cover" />
+                  <TouchableOpacity activeOpacity={0.9} onPress={() => setZoomImageUri(item.imageUri!)}>
+                    <Image source={{ uri: item.imageUri }} style={styles.chatImgBubble} resizeMode="cover" />
+                  </TouchableOpacity>
                 )}
                 {!!item.audioUri && (
                   <VoiceMessagePlayer
@@ -292,6 +327,14 @@ export default function MessagesScreen() {
           ))}
         </ScrollView>
 
+        {uploadingMedia && (
+          <View style={[styles.recBar, { backgroundColor: theme.primarySoft, borderColor: theme.primary }]}>
+            <Text style={{ color: theme.primary, fontSize: 12, fontWeight: "800" }}>
+              ⏳ جاري رفع الوسائط وإرسالها أونلاين...
+            </Text>
+          </View>
+        )}
+
         {recording && (
           <View style={[styles.recBar, { backgroundColor: "rgba(239,68,68,0.16)", borderColor: theme.danger }]}>
             <View style={[styles.recDot, { backgroundColor: theme.danger }]} />
@@ -307,6 +350,9 @@ export default function MessagesScreen() {
             onPress={handleToggleRecordVoice}
           >
             <Ionicons name={recording ? "stop" : "mic"} size={19} color={recording ? "#fff" : theme.primary} />
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.circleBtn, { backgroundColor: theme.surface2 }]} onPress={handleTakeChatPhoto}>
+            <Ionicons name="camera-outline" size={19} color={theme.text} />
           </TouchableOpacity>
           <TouchableOpacity style={[styles.circleBtn, { backgroundColor: theme.surface2 }]} onPress={handlePickChatImage}>
             <Ionicons name="image-outline" size={19} color={theme.text} />
@@ -332,10 +378,35 @@ export default function MessagesScreen() {
             }}
           >
             <LinearGradient colors={theme.btnGrad} style={styles.sendBtn}>
-              <Ionicons name="send" size={16} color={theme.btnText} />
+              <Ionicons name="send" size={17} color={theme.btnText} />
             </LinearGradient>
           </TouchableOpacity>
         </View>
+
+        <Modal visible={!!zoomImageUri} transparent animationType="fade" onRequestClose={() => setZoomImageUri(null)}>
+          <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.94)", justifyContent: "center", alignItems: "center" }}>
+            <TouchableOpacity
+              onPress={() => setZoomImageUri(null)}
+              style={{
+                position: "absolute",
+                top: 48,
+                right: 18,
+                zIndex: 10,
+                width: 42,
+                height: 42,
+                borderRadius: 21,
+                backgroundColor: "rgba(255,255,255,0.18)",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Ionicons name="close" size={24} color="#fff" />
+            </TouchableOpacity>
+            {!!zoomImageUri && (
+              <Image source={{ uri: zoomImageUri }} style={{ width: "96%", height: "78%" }} resizeMode="contain" />
+            )}
+          </View>
+        </Modal>
       </View>
     );
   }

@@ -34,6 +34,7 @@ import LiveStreamModal from "../components/LiveStreamModal";
 import WalletModal from "../components/WalletModal";
 import FriendsModal from "../components/FriendsModal";
 import ReelsModal from "../components/ReelsModal";
+import { uploadMediaFile } from "../services/mediaUpload";
 import { PulseDot } from "../components/LuxuryMotion";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -126,6 +127,7 @@ export default function FeedScreen({
 }) {
   const {
     currentUser,
+    token,
     posts,
     allUsers,
     stories,
@@ -293,9 +295,19 @@ export default function FeedScreen({
   async function pickStoryImage() {
     const res = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.85,
+      quality: 0.72,
     });
-    if (!res.canceled && res.assets[0]?.uri) setStoryImg(res.assets[0].uri);
+    if (!res.canceled && res.assets[0]?.uri) {
+      let uri = res.assets[0].uri;
+      if (token) {
+        try {
+          uri = await uploadMediaFile(uri, "image/jpeg", token);
+        } catch {
+          // keep local URI if offline
+        }
+      }
+      setStoryImg(uri);
+    }
   }
 
   return (

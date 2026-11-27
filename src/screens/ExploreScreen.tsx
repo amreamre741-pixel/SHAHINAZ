@@ -24,6 +24,7 @@ import type { AudioRoom } from "../types";
 import ShahinazAiModal from "../components/ShahinazAiModal";
 import AuroraBackground from "../components/AuroraBackground";
 import VoiceMessagePlayer from "../components/VoiceMessagePlayer";
+import ReelsModal from "../components/ReelsModal";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const GRID_SIZE = (SCREEN_WIDTH - 36) / 3;
@@ -112,6 +113,7 @@ export default function ExploreScreen() {
   const [wilayaFilter, setWilayaFilter] = useState("الكل");
   const [ordersOpen, setOrdersOpen] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
+  const [fullReelsOpen, setFullReelsOpen] = useState(false);
   const [likedReels, setLikedReels] = useState<string[]>([]);
   const [previewPostId, setPreviewPostId] = useState<string | null>(null);
   const [reelComments, setReelComments] = useState(INITIAL_REEL_COMMENTS);
@@ -484,6 +486,46 @@ export default function ExploreScreen() {
           keyExtractor={(r) => r.id}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 20, gap: 14 }}
+          ListHeaderComponent={
+            <TouchableOpacity activeOpacity={0.9} onPress={() => setFullReelsOpen(true)}>
+              <LinearGradient
+                colors={["#7C3AED", "#DB2777"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={{
+                  flexDirection: "row-reverse",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  paddingHorizontal: 16,
+                  paddingVertical: 14,
+                  borderRadius: 20,
+                  borderWidth: 1,
+                  borderColor: "rgba(255,255,255,0.28)",
+                }}
+              >
+                <View style={{ alignItems: "flex-end", flex: 1 }}>
+                  <Text style={{ color: "#fff", fontWeight: "900", fontSize: 14.5 }}>
+                    🎬 استوديو الريلز العمودي بملء الشاشة
+                  </Text>
+                  <Text style={{ color: "rgba(255,255,255,0.85)", fontSize: 11.5, marginTop: 2 }}>
+                    تصفح الفيديوهات الحقيقية بالسحب للأعلى مع الهدايا والقلوب ❤️
+                  </Text>
+                </View>
+                <View
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 20,
+                    backgroundColor: "rgba(255,255,255,0.22)",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Ionicons name="play" size={20} color="#fff" />
+                </View>
+              </LinearGradient>
+            </TouchableOpacity>
+          }
           renderItem={({ item }) => {
             const liked = likedReels.includes(item.id);
             const extraComments = (reelComments[item.id]?.length ?? 0) - (INITIAL_REEL_COMMENTS[item.id]?.length ?? 0);
@@ -1219,6 +1261,7 @@ export default function ExploreScreen() {
       </Modal>
 
       <ShahinazAiModal visible={aiOpen} onClose={() => setAiOpen(false)} />
+      <ReelsModal visible={fullReelsOpen} onClose={() => setFullReelsOpen(false)} />
     </View>
   );
 }

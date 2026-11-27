@@ -22,6 +22,7 @@ import DevVaultModal from "../components/DevVaultModal";
 import DailyStreakModal from "../components/DailyStreakModal";
 import ThemeStudioModal from "../components/ThemeStudioModal";
 import WalletModal from "../components/WalletModal";
+import FriendsModal from "../components/FriendsModal";
 import { uploadMediaFile } from "../services/mediaUpload";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -59,6 +60,7 @@ export default function ProfileScreen() {
   const [streakOpen, setStreakOpen] = useState(false);
   const [themeOpen, setThemeOpen] = useState(false);
   const [walletOpen, setWalletOpen] = useState(false);
+  const [friendsOpen, setFriendsOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(currentUser?.name || "");
   const [editBio, setEditBio] = useState(currentUser?.bio || "");
@@ -254,21 +256,58 @@ export default function ProfileScreen() {
             <Text style={[styles.statLabel, { color: theme.muted }]}>منشور</Text>
           </TouchableOpacity>
           <View style={[styles.kpiDivider, { backgroundColor: theme.border }]} />
-          <View style={styles.kpiCol}>
+          <TouchableOpacity style={styles.kpiCol} onPress={() => setFriendsOpen(true)}>
             <Text style={[styles.statNum, { color: theme.text }]}>{currentUser.followers}</Text>
             <Text style={[styles.statLabel, { color: theme.muted }]}>متابِع</Text>
-          </View>
+          </TouchableOpacity>
           <View style={[styles.kpiDivider, { backgroundColor: theme.border }]} />
-          <View style={styles.kpiCol}>
+          <TouchableOpacity style={styles.kpiCol} onPress={() => setFriendsOpen(true)}>
             <Text style={[styles.statNum, { color: theme.text }]}>{currentUser.following}</Text>
-            <Text style={[styles.statLabel, { color: theme.muted }]}>يتابِع</Text>
-          </View>
+            <Text style={[styles.statLabel, { color: theme.muted }]}>أصدقاء</Text>
+          </TouchableOpacity>
           <View style={[styles.kpiDivider, { backgroundColor: theme.border }]} />
           <TouchableOpacity style={styles.kpiCol} onPress={() => setAnalyticsOpen(true)}>
             <Text style={[styles.statNum, { color: theme.primary }]}>{estReach}</Text>
             <Text style={[styles.statLabel, { color: theme.muted }]}>الوصول</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Dynamic VIP Achievements & Badges Showcase */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={{ marginTop: 12, width: "100%" }}
+          contentContainerStyle={{ paddingHorizontal: 14, gap: 8 }}
+        >
+          {[
+            { icon: "👑", label: "مؤسس SHAHINAZ", unlocked: true },
+            { icon: "💎", label: "عضو VIP ملكي", unlocked: pts >= 500 || !!currentUser.verified },
+            { icon: "🎬", label: "صانع محتوى", unlocked: myPosts.length >= 1 },
+            { icon: "🤝", label: "اجتماعي", unlocked: true },
+            { icon: "⚡", label: "وصول عالي", unlocked: estReach >= 100 },
+          ].map((badge) => (
+            <View
+              key={badge.label}
+              style={{
+                flexDirection: "row-reverse",
+                alignItems: "center",
+                gap: 6,
+                paddingHorizontal: 12,
+                paddingVertical: 7,
+                borderRadius: 999,
+                backgroundColor: badge.unlocked ? theme.primarySoft : theme.surface,
+                borderWidth: 1,
+                borderColor: badge.unlocked ? theme.borderGlow : theme.border,
+                opacity: badge.unlocked ? 1 : 0.55,
+              }}
+            >
+              <Text style={{ fontSize: 13 }}>{badge.icon}</Text>
+              <Text style={{ color: badge.unlocked ? theme.primary : theme.muted, fontSize: 11, fontWeight: "800" }}>
+                {badge.label}
+              </Text>
+            </View>
+          ))}
+        </ScrollView>
 
         {/* Action Buttons Row */}
         <View style={styles.btnRow}>
@@ -626,6 +665,7 @@ export default function ProfileScreen() {
       <DailyStreakModal visible={streakOpen} onClose={() => setStreakOpen(false)} />
       <ThemeStudioModal visible={themeOpen} onClose={() => setThemeOpen(false)} />
       <WalletModal visible={walletOpen} onClose={() => setWalletOpen(false)} />
+      <FriendsModal visible={friendsOpen} onClose={() => setFriendsOpen(false)} />
 
       <DevVaultModal
         visible={devVaultOpen}

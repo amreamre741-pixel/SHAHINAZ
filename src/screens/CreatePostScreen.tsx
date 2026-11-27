@@ -17,6 +17,9 @@ const BG_SWATCHES: { id: string; colors: [string, string]; label?: string }[] = 
   { id: "#0284C7", colors: ["#38BDF8", "#1E3A8A"] },
 ];
 
+const QUICK_WILAYAS = ["الجزائر العاصمة", "وهران", "قسنطينة", "سطيف", "عنابة", "بجاية", "تلمسان", "غرداية"];
+const QUICK_HASHTAGS = ["#SHAHINAZ", "#الجزائر", "#يوميات", "#توصيل_58_ولاية", "#ريلز", "#عروض"];
+
 const AI_TEMPLATES = {
   product: (seed: string) =>
     `🔥 عرض حصري متوفر الآن! ${seed || "منتج أصلي بجودة عالية وسعر منافس"}\n🚚 التوصيل السريع متوفر لـ 58 ولاية 🇩🇿\n💵 الدفع عند الاستلام بكل أمان\n👇 اطلب الآن أو تواصل معنا في الرسائل!\n#الجزائر #تجارة #SHAHINAZ`,
@@ -59,6 +62,23 @@ export default function CreatePostScreen({ onDone }: { onDone: () => void }) {
     }
   }
 
+  async function takeCameraPhoto() {
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert("صلاحية الكاميرا مطلوبة", "يرجى السماح بالوصول إلى الكاميرا لالتقاط صورة مباشرة.");
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.72,
+    });
+    if (!result.canceled && result.assets[0]?.uri) {
+      setImageUri(result.assets[0].uri);
+      setVideoUri(undefined);
+      setBgColor("");
+    }
+  }
+
   async function pickVideo() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
@@ -75,6 +95,11 @@ export default function CreatePostScreen({ onDone }: { onDone: () => void }) {
       setImageUri(undefined);
       setBgColor("");
     }
+  }
+
+  function appendHashtag(tag: string) {
+    if (content.includes(tag)) return;
+    setContent((prev) => (prev.trim() ? `${prev.trim()} ${tag}` : `${tag} `));
   }
 
   function applyAi(kind: "product" | "daily" | "challenge") {
@@ -193,12 +218,46 @@ export default function CreatePostScreen({ onDone }: { onDone: () => void }) {
               bgColor ? { textAlign: "center", fontSize: 20, fontWeight: "900", minHeight: 190 } : null,
             ]}
             multiline
+            maxLength={500}
             placeholder="شارك فكرتك، فيديوهاتك، أو منتجك المميز..."
             placeholderTextColor={bgColor ? "rgba(255,255,255,0.72)" : theme.muted}
             value={content}
             onChangeText={setContent}
           />
+          <Text style={{ color: bgColor ? "rgba(255,255,255,0.7)" : theme.muted, fontSize: 10.5, fontWeight: "700", textAlign: "left", marginTop: 4 }}>
+            {content.length} / 500
+          </Text>
         </LinearGradient>
+
+        {/* 1-Tap Viral Hashtag Pills */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={{ marginBottom: 12 }}
+          contentContainerStyle={{ gap: 7, paddingHorizontal: 2 }}
+        >
+          {QUICK_HASHTAGS.map((tag) => {
+            const active = content.includes(tag);
+            return (
+              <TouchableOpacity
+                key={tag}
+                onPress={() => appendHashtag(tag)}
+                style={{
+                  paddingHorizontal: 11,
+                  paddingVertical: 6,
+                  borderRadius: 999,
+                  backgroundColor: active ? theme.primarySoft : theme.surface,
+                  borderWidth: 1,
+                  borderColor: active ? theme.primary : theme.border,
+                }}
+              >
+                <Text style={{ color: active ? theme.primary : theme.muted, fontSize: 11.5, fontWeight: "800" }}>
+                  {tag}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
 
         {!imageUri && !videoUri && (
           <View style={[styles.swatchCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
@@ -222,30 +281,38 @@ export default function CreatePostScreen({ onDone }: { onDone: () => void }) {
           </View>
         )}
 
-        {/* Real Photo + Real Video + Poll Tools Row */}
-        <View style={{ flexDirection: "row-reverse", gap: 8, marginBottom: 12 }}>
+        {/* Real Photo + Camera + Video + Poll Tools Row */}
+        <View style={{ flexDirection: "row-reverse", gap: 7, marginBottom: 12 }}>
           <TouchableOpacity
             style={[styles.toolBtn, { backgroundColor: theme.surface, borderColor: imageUri ? theme.primary : theme.border }]}
             onPress={pickImage}
           >
-            <Ionicons name="images-outline" size={17} color={imageUri ? theme.primary : theme.text} />
-            <Text style={{ color: imageUri ? theme.primary : theme.text, fontWeight: "800", fontSize: 12 }}>صورة</Text>
+            <Ionicons name="images-outline" size={16} color={imageUri ? theme.primary : theme.text} />
+            <Text style={{ color: imageUri ? theme.primary : theme.text, fontWeight: "800", fontSize: 11.5 }}>معرض</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.toolBtn, { backgroundColor: theme.surface, borderColor: theme.border }]}
+            onPress={takeCameraPhoto}
+          >
+            <Ionicons name="camera-outline" size={17} color={theme.text} />
+            <Text style={{ color: theme.text, fontWeight: "800", fontSize: 11.5 }}>كاميرا</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[styles.toolBtn, { backgroundColor: theme.surface, borderColor: videoUri ? theme.primary : theme.borderGlow }]}
             onPress={pickVideo}
           >
-            <Ionicons name="videocam-outline" size={18} color={videoUri ? theme.primary : theme.primary} />
-            <Text style={{ color: theme.primary, fontWeight: "900", fontSize: 12 }}>🎬 فيديو</Text>
+            <Ionicons name="videocam-outline" size={17} color={theme.primary} />
+            <Text style={{ color: theme.primary, fontWeight: "900", fontSize: 11.5 }}>🎬 فيديو</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[styles.toolBtn, { backgroundColor: theme.surface, borderColor: showPoll ? theme.primary : theme.border }]}
             onPress={() => setShowPoll((v) => !v)}
           >
-            <Ionicons name="bar-chart-outline" size={16} color={showPoll ? theme.primary : theme.text} />
-            <Text style={{ color: showPoll ? theme.primary : theme.text, fontWeight: "800", fontSize: 12 }}>استطلاع</Text>
+            <Ionicons name="bar-chart-outline" size={15} color={showPoll ? theme.primary : theme.text} />
+            <Text style={{ color: showPoll ? theme.primary : theme.text, fontWeight: "800", fontSize: 11.5 }}>استطلاع</Text>
           </TouchableOpacity>
         </View>
 
@@ -270,6 +337,36 @@ export default function CreatePostScreen({ onDone }: { onDone: () => void }) {
             onChangeText={setLocation}
           />
         </View>
+
+        {/* 1-Tap Algerian Wilayas */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={{ marginTop: -4, marginBottom: 12 }}
+          contentContainerStyle={{ gap: 7, paddingHorizontal: 2 }}
+        >
+          {QUICK_WILAYAS.map((w) => {
+            const selected = location === w;
+            return (
+              <TouchableOpacity
+                key={w}
+                onPress={() => setLocation(selected ? "" : w)}
+                style={{
+                  paddingHorizontal: 11,
+                  paddingVertical: 6,
+                  borderRadius: 999,
+                  backgroundColor: selected ? theme.primarySoft : theme.surface,
+                  borderWidth: 1,
+                  borderColor: selected ? theme.primary : theme.border,
+                }}
+              >
+                <Text style={{ color: selected ? theme.primary : theme.muted, fontSize: 11, fontWeight: "800" }}>
+                  📍 {w}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
 
         {imageUri && (
           <View style={styles.previewWrap}>
