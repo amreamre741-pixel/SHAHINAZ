@@ -60,6 +60,7 @@ export interface Story {
   id: string;
   userName: string;
   avatarEmoji: string;
+  avatarUri?: string;
   text?: string;
   imageUri?: string;
   seen: boolean;
