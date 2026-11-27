@@ -76,6 +76,8 @@ interface AppContextValue {
   codOrders: CodOrder[];
   chats: ChatThread[];
   accentColor: string;
+  streakDays: number;
+  claimedStreakToday: boolean;
   followingUserIds: string[];
   blockedUserIds: string[];
   reportedPostIds: string[];
@@ -99,6 +101,9 @@ interface AppContextValue {
   updateProfile: (name: string, bio: string, avatarUri?: string) => void;
   togglePrivateAccount: () => void;
   setAccentColor: (color: string) => void;
+  claimDailyStreak: () => { ok: boolean; reward: number; message: string };
+  redeemReward: (kind: "verify" | "vip" | "boost", cost: number) => { ok: boolean; message: string };
+  sendPostGift: (postId: string, emoji: string, cost: number) => { ok: boolean; message: string };
   toggleFollowUser: (userId: string) => void;
   toggleLike: (postId: string) => void;
   setReaction: (postId: string, emoji: ReactionEmoji) => void;
@@ -400,7 +405,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [audioRooms, setAudioRooms] = useState<AudioRoom[]>(INITIAL_AUDIO_ROOMS);
   const [codOrders, setCodOrders] = useState<CodOrder[]>([]);
   const [chats, setChats] = useState<ChatThread[]>(INITIAL_CHATS);
-  const [accentColor, setAccentColor] = useState<string>("#8b5cf6");
+  const [accentColor, setAccentColor] = useState<string>("#a855f7");
+  const [streakDays, setStreakDays] = useState<number>(1);
+  const [lastStreakDate, setLastStreakDate] = useState<string>("");
   const [followingUserIds, setFollowingUserIds] = useState<string[]>(["u_1", "u_2"]);
   const [blockedUserIds, setBlockedUserIds] = useState<string[]>([]);
   const [reportedPostIds, setReportedPostIds] = useState<string[]>([]);
@@ -415,7 +422,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [bannedWords, setBannedWords] = useState<string[]>(["احتيال", "سبام"]);
   const [rolePermissions, setRolePermissions] = useState<Record<UserRole, RolePermissions>>(DEFAULT_ROLE_PERMISSIONS);
   const [adminLogs, setAdminLogs] = useState<AdminLogItem[]>([
-    { id: "lg_1", action: "تشغيل نظام إدارة SHAHINAZ DevOS v2.0", time: "اليوم" },
+    { id: "lg_1", action: "تشغيل نظام إدارة SHAHINAZ DevOS v2.1", time: "اليوم" },
   ]);
   const adminLoadedRef = useRef(false);
 
@@ -480,6 +487,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           if (typeof cfg.marketEnabled === "boolean") setMarketEnabled(cfg.marketEnabled);
           if (typeof cfg.audioRoomsEnabled === "boolean") setAudioRoomsEnabled(cfg.audioRoomsEnabled);
           if (typeof cfg.devHudEnabled === "boolean") setDevHudEnabled(cfg.devHudEnabled);
+          if (typeof cfg.accentColor === "string") setAccentColor(cfg.accentColor);
+          if (typeof cfg.streakDays === "number") setStreakDays(cfg.streakDays);
+          if (typeof cfg.lastStreakDate === "string") setLastStreakDate(cfg.lastStreakDate);
           if (Array.isArray(cfg.bannedWords)) setBannedWords(cfg.bannedWords);
           if (cfg.rolePermissions) setRolePermissions({ ...DEFAULT_ROLE_PERMISSIONS, ...cfg.rolePermissions });
         }
@@ -508,11 +518,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         marketEnabled,
         audioRoomsEnabled,
         devHudEnabled,
+        accentColor,
+        streakDays,
+        lastStreakDate,
         bannedWords,
         rolePermissions,
       })
     ).catch(() => {});
-  }, [announcement, maintenanceMode, allowRegistration, marketEnabled, audioRoomsEnabled, devHudEnabled, bannedWords, rolePermissions]);
+  }, [
+    announcement,
+    maintenanceMode,
+    allowRegistration,
+    marketEnabled,
+    audioRoomsEnabled,
+    devHudEnabled,
+    accentColor,
+    streakDays,
+    lastStreakDate,
+    bannedWords,
+    rolePermissions,
+  ]);
 
   function login(name: string, username: string) {
     setCurrentUser({
@@ -1067,6 +1092,121 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     pushAdminLog("إعادة ضبط إعدادات النظام للوضع الافتراضي 🔄");
   }
 
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const claimedStreakToday = lastStreakDate === todayKey;
+
+  function claimDailyStreak() {
+    if (!currentUser) return { ok: false, reward: 0, message: "يرجى تسجيل الدخول أولاً." };
+    if (claimedStreakToday) {
+      return { ok: false, reward: 0, message: "لقد استلمت مكافأة اليوم بالفعل — عد غداً لمضاعفة السلسلة!" };
+    }
+    const rewards = [50, 75, 100, 150, 200, 300, 500];
+    const nextDay = streakDays >= 7 ? 1 : streakDays + 1;
+    const reward = rewards[nextDay - 1];
+    setStreakDays(nextDay);
+    setLastStreakDate(todayKey);
+    setCurrentUser((prev) => {
+      if (!prev) return prev;
+      const updated = { ...prev, points: (prev.points ?? 150) + reward };
+      AsyncStorage.setItem("shahinaz_user", JSON.stringify(updated)).catch(() => {});
+      return updated;
+    });
+    setNotifications((prev) => [
+      {
+        id: `n_str_${Date.now()}`,
+        emoji: "🔥",
+        text: `تم إضافة +${reward} نقطة من مكافأة الدخول اليومي!`,
+        time: "الآن",
+        read: false,
+      },
+      ...prev,
+    ]);
+    return { ok: true, reward, message: `تمت إضافة +${reward} نقطة 🪙 إلى رصيدك بنجاح!` };
+  }
+
+  function redeemReward(kind: "verify" | "vip" | "boost", cost: number) {
+    if (!currentUser) return { ok: false, message: "يرجى تسجيل الدخول." };
+    const pts = currentUser.points ?? 150;
+    if (pts < cost) {
+      return { ok: false, message: `تحتاج ${cost} نقطة (رصيدك الحالي ${pts} نقطة). اجمع النقاط من الدخول اليومي!` };
+    }
+    if (kind === "verify" && currentUser.verified) {
+      return { ok: false, message: "حسابك موثّق بالشارة الزرقاء بالفعل ☑️!" };
+    }
+    if (kind === "vip" && (currentUser.role === "VIP" || currentUser.role === "ADMIN")) {
+      return { ok: false, message: "لديك رتبة VIP أو أعلى بالفعل 👑!" };
+    }
+    if (kind === "boost") {
+      const myPost = posts.find((p) => p.author.id === currentUser.id) || posts[0];
+      if (!myPost) return { ok: false, message: "انشر منشوراً أولاً لتتمكن من ترويجه." };
+      setPosts((prev) =>
+        prev.map((p) => (p.id === myPost.id ? { ...p, isSponsored: true, isPinned: true } : p))
+      );
+    }
+    setCurrentUser((prev) => {
+      if (!prev) return prev;
+      const updated: User = {
+        ...prev,
+        points: Math.max(0, (prev.points ?? 150) - cost),
+        verified: kind === "verify" ? true : prev.verified,
+        role: kind === "vip" ? "VIP" : prev.role,
+      };
+      AsyncStorage.setItem("shahinaz_user", JSON.stringify(updated)).catch(() => {});
+      return updated;
+    });
+    if (kind === "verify") {
+      setPosts((prev) =>
+        prev.map((p) => (p.author.id === currentUser.id ? { ...p, author: { ...p.author, verified: true } } : p))
+      );
+    }
+    const labels = {
+      verify: "مبروك! تم تفعيل شارة التوثيق الأزرق ☑️ على حسابك!",
+      vip: "مبروك! تمت ترقية حسابك إلى رتبة VIP الذهبية 👑!",
+      boost: "تم ترويج وتثبيت أحدث منشور لك بنجاح 🚀⭐!",
+    };
+    return { ok: true, message: labels[kind] };
+  }
+
+  function sendPostGift(postId: string, emoji: string, cost: number) {
+    if (!currentUser) return { ok: false, message: "يرجى تسجيل الدخول." };
+    const pts = currentUser.points ?? 150;
+    if (pts < cost) {
+      return { ok: false, message: `رصيدك (${pts} 🪙) لا يكفي لهذه الهدية (${cost} 🪙).` };
+    }
+    const targetPost = posts.find((p) => p.id === postId);
+    if (!targetPost) return { ok: false, message: "المنشور غير موجود." };
+    setCurrentUser((prev) => {
+      if (!prev) return prev;
+      const updated = { ...prev, points: Math.max(0, (prev.points ?? 150) - cost) };
+      AsyncStorage.setItem("shahinaz_user", JSON.stringify(updated)).catch(() => {});
+      return updated;
+    });
+    setUsers((prev) =>
+      prev.map((u) => (u.id === targetPost.author.id ? { ...u, points: (u.points ?? 100) + cost } : u))
+    );
+    setPosts((prev) =>
+      prev.map((p) =>
+        p.id === postId
+          ? {
+              ...p,
+              likes: p.likes + 5,
+              comments: [
+                ...p.comments,
+                {
+                  id: `g_${Date.now()}`,
+                  userId: currentUser.id,
+                  userName: currentUser.name,
+                  text: `أرسل هدية ${emoji} (${cost} نقطة) 🎁`,
+                  createdAt: "الآن",
+                },
+              ],
+            }
+          : p
+      )
+    );
+    return { ok: true, message: `تم إرسال هدية ${emoji} إلى ${targetPost.author.name} بنجاح! 🎁` };
+  }
+
   const visiblePosts = posts
     .filter((p) => !blockedUserIds.includes(p.author.id) && !reportedPostIds.includes(p.id))
     .sort((a, b) => Number(!!b.isPinned) - Number(!!a.isPinned));
@@ -1092,6 +1232,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         codOrders,
         chats: chats.filter((c) => !blockedUserIds.includes(c.user.id)),
         accentColor,
+        streakDays,
+        claimedStreakToday,
         followingUserIds,
         blockedUserIds,
         reportedPostIds,
@@ -1115,6 +1257,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         updateProfile,
         togglePrivateAccount,
         setAccentColor,
+        claimDailyStreak,
+        redeemReward,
+        sendPostGift,
         toggleFollowUser,
         toggleLike,
         setReaction,

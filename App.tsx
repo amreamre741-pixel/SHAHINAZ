@@ -20,9 +20,10 @@ import ProfileScreen from "./src/screens/ProfileScreen";
 type Tab = "feed" | "explore" | "create" | "messages" | "profile";
 
 function MainApp() {
-  const { currentUser, devHudEnabled, adminToggleDevHud } = useApp();
+  const { currentUser, chats, accentColor, devHudEnabled, adminToggleDevHud } = useApp();
   const [tab, setTab] = useState<Tab>("feed");
   const [hudAdminOpen, setHudAdminOpen] = useState(false);
+  const unreadMessages = chats.reduce((sum, c) => sum + c.unread, 0);
 
   useEffect(() => {
     devTelemetry.installGlobalHooks();
@@ -66,27 +67,44 @@ function MainApp() {
       {/* Ultra-Clean Instagram AMOLED Bottom Navigation Bar */}
       <View style={styles.tabBar}>
         <TouchableOpacity style={styles.tabBtn} onPress={() => setTab("feed")}>
-          <Ionicons name={tab === "feed" ? "home" : "home-outline"} size={25} color={tab === "feed" ? COLORS.text : COLORS.muted} />
+          <Ionicons name={tab === "feed" ? "home" : "home-outline"} size={25} color={tab === "feed" ? accentColor : COLORS.muted} />
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.tabBtn} onPress={() => setTab("explore")}>
-          <Ionicons name={tab === "explore" ? "search" : "search-outline"} size={26} color={tab === "explore" ? COLORS.text : COLORS.muted} />
+          <Ionicons name={tab === "explore" ? "search" : "search-outline"} size={26} color={tab === "explore" ? accentColor : COLORS.muted} />
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.tabBtn} onPress={() => setTab("create")}>
-          <Ionicons name={tab === "create" ? "add-circle" : "add-circle-outline"} size={29} color={tab === "create" ? COLORS.text : COLORS.muted} />
+          <Ionicons name={tab === "create" ? "add-circle" : "add-circle-outline"} size={29} color={tab === "create" ? accentColor : COLORS.muted} />
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.tabBtn} onPress={() => setTab("messages")}>
-          <Ionicons
-            name={tab === "messages" ? "chatbubble-ellipses" : "chatbubble-ellipses-outline"}
-            size={24}
-            color={tab === "messages" ? COLORS.text : COLORS.muted}
-          />
+          <View style={{ position: "relative" }}>
+            <Ionicons
+              name={tab === "messages" ? "chatbubble-ellipses" : "chatbubble-ellipses-outline"}
+              size={24}
+              color={tab === "messages" ? accentColor : COLORS.muted}
+            />
+            {unreadMessages > 0 && (
+              <View
+                style={{
+                  position: "absolute",
+                  top: -2,
+                  right: -3,
+                  width: 9,
+                  height: 9,
+                  borderRadius: 4.5,
+                  backgroundColor: COLORS.heart,
+                  borderWidth: 1.5,
+                  borderColor: "#000",
+                }}
+              />
+            )}
+          </View>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.tabBtn} onPress={() => setTab("profile")}>
-          <Ionicons name={tab === "profile" ? "person-circle" : "person-circle-outline"} size={27} color={tab === "profile" ? COLORS.text : COLORS.muted} />
+          <Ionicons name={tab === "profile" ? "person-circle" : "person-circle-outline"} size={27} color={tab === "profile" ? accentColor : COLORS.muted} />
         </TouchableOpacity>
       </View>
 

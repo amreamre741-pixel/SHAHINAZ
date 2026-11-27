@@ -20,6 +20,7 @@ import { COLORS } from "../theme";
 import { useApp } from "../store/AppContext";
 import AdminScreen from "./AdminScreen";
 import DevVaultModal from "../components/DevVaultModal";
+import DailyStreakModal from "../components/DailyStreakModal";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const GRID_SIZE = (SCREEN_WIDTH - 4) / 3;
@@ -50,6 +51,8 @@ export default function ProfileScreen() {
   const [subTab, setSubTab] = useState<"posts" | "saved" | "settings">("posts");
   const [showAdmin, setShowAdmin] = useState(false);
   const [devVaultOpen, setDevVaultOpen] = useState(false);
+  const [analyticsOpen, setAnalyticsOpen] = useState(false);
+  const [streakOpen, setStreakOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(currentUser?.name || "");
   const [editBio, setEditBio] = useState(currentUser?.bio || "");
@@ -67,6 +70,15 @@ export default function ProfileScreen() {
   const myPosts = posts.filter((p) => p.author.id === currentUser.id);
   const savedPosts = posts.filter((p) => p.savedByMe);
   const roleBadge = currentUser.role ? ROLE_LABELS[currentUser.role] : undefined;
+  const totalLikes = myPosts.reduce((s, p) => s + p.likes, 0);
+  const totalComments = myPosts.reduce((s, p) => s + p.comments.length, 0);
+  const estReach = Math.max(120, totalLikes * 14 + currentUser.followers * 3 + myPosts.length * 85);
+  const pts = currentUser.points ?? 150;
+  const creatorLevel =
+    pts >= 1000 ? { title: "سفير SHAHINAZ 👑", pct: 100 } :
+    pts >= 500 ? { title: "نجم صاعد ⭐", pct: Math.round((pts / 1000) * 100) } :
+    pts >= 250 ? { title: "صانع محتوى 🎬", pct: Math.round((pts / 500) * 100) } :
+    { title: "عضو نشط 🌱", pct: Math.min(100, Math.round((pts / 250) * 100)) };
 
   async function pickAvatar() {
     const res = await ImagePicker.launchImageLibraryAsync({
@@ -168,13 +180,13 @@ export default function ProfileScreen() {
               <Text style={[styles.vipText, { color: roleBadge.color }]}>{roleBadge.label}</Text>
             </View>
           )}
-          <View style={styles.vipPill}>
-            <Text style={styles.vipText}>🏆 {currentUser.points ?? 150} نقطة</Text>
-          </View>
+          <TouchableOpacity style={styles.vipPill} onPress={() => setStreakOpen(true)}>
+            <Text style={styles.vipText}>🏆 {pts} نقطة · متجر 🎁</Text>
+          </TouchableOpacity>
         </View>
         <Text style={styles.bio}>{currentUser.bio}</Text>
 
-        {/* Action Buttons */}
+        {/* Action Buttons + Creator Analytics Studio */}
         <View style={styles.btnRow}>
           <TouchableOpacity
             style={styles.grayBtn}
@@ -186,11 +198,14 @@ export default function ProfileScreen() {
           >
             <Text style={styles.grayBtnText}>{editing ? "إغلاق" : "تعديل الملف"}</Text>
           </TouchableOpacity>
+          <TouchableOpacity style={[styles.grayBtn, { backgroundColor: "rgba(168,85,247,0.2)" }]} onPress={() => setAnalyticsOpen(true)}>
+            <Text style={[styles.grayBtnText, { color: "#e9d5ff" }]}>📊 إحصائياتي</Text>
+          </TouchableOpacity>
           <TouchableOpacity
             style={styles.grayBtn}
             onPress={() => Share.share({ message: `تابعني على تطبيق SHAHINAZ: @${currentUser.username}` })}
           >
-            <Text style={styles.grayBtnText}>مشاركة الحساب</Text>
+            <Text style={styles.grayBtnText}>مشاركة</Text>
           </TouchableOpacity>
         </View>
 
@@ -302,7 +317,7 @@ export default function ProfileScreen() {
             onPress={handleSecretVersionTap}
             style={{ alignItems: "center", paddingTop: 14, paddingBottom: 6 }}
           >
-            <Text style={{ color: COLORS.muted, fontSize: 11.5 }}>SHAHINAZ Ultra · v1.0.0</Text>
+            <Text style={{ color: COLORS.muted, fontSize: 11.5 }}>SHAHINAZ Ultra 3.0 · OTA Live</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -384,6 +399,92 @@ export default function ProfileScreen() {
           )}
         </View>
       </Modal>
+
+      {/* Creator Analytics Studio Modal */}
+      <Modal visible={analyticsOpen} transparent animationType="slide" onRequestClose={() => setAnalyticsOpen(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.analyticsCard}>
+            <View style={{ flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+              <Text style={{ color: COLORS.text, fontSize: 16, fontWeight: "900" }}>📊 استوديو تحليلاتك</Text>
+              <TouchableOpacity onPress={() => setAnalyticsOpen(false)}>
+                <Ionicons name="close" size={24} color={COLORS.text} />
+              </TouchableOpacity>
+            </View>
+
+            <LinearGradient
+              colors={["#4c1d95", "#831843"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={{ borderRadius: 14, padding: 14, marginBottom: 14 }}
+            >
+              <View style={{ flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center" }}>
+                <View style={{ alignItems: "flex-end" }}>
+                  <Text style={{ color: "#e9d5ff", fontSize: 11, fontWeight: "700" }}>مستوى صانع المحتوى</Text>
+                  <Text style={{ color: "#fff", fontSize: 17, fontWeight: "900", marginTop: 2 }}>{creatorLevel.title}</Text>
+                </View>
+                <View style={{ backgroundColor: "rgba(0,0,0,0.35)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999 }}>
+                  <Text style={{ color: "#fde68a", fontWeight: "800", fontSize: 12 }}>🪙 {pts} نقطة</Text>
+                </View>
+              </View>
+              <View style={{ height: 7, backgroundColor: "rgba(255,255,255,0.18)", borderRadius: 4, marginTop: 12, overflow: "hidden" }}>
+                <View style={{ width: `${creatorLevel.pct}%`, height: "100%", backgroundColor: "#fde68a", borderRadius: 4 }} />
+              </View>
+              <Text style={{ color: "rgba(255,255,255,0.8)", fontSize: 11, textAlign: "right", marginTop: 5 }}>
+                التقدم للمستوى التالي: {creatorLevel.pct}%
+              </Text>
+            </LinearGradient>
+
+            <View style={{ flexDirection: "row-reverse", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
+              {[
+                { label: "الوصول التقديري", val: estReach.toLocaleString("fr-DZ"), icon: "eye-outline" as const, color: "#38bdf8" },
+                { label: "مجموع الإعجابات", val: totalLikes.toLocaleString("fr-DZ"), icon: "heart" as const, color: COLORS.heart },
+                { label: "التعليقات", val: String(totalComments), icon: "chatbubble-ellipses" as const, color: "#a855f7" },
+                { label: "منشوراتك", val: String(myPosts.length), icon: "grid-outline" as const, color: COLORS.success },
+              ].map((kpi) => (
+                <View key={kpi.label} style={styles.kpiBox}>
+                  <Ionicons name={kpi.icon} size={18} color={kpi.color} />
+                  <Text style={{ color: COLORS.text, fontSize: 18, fontWeight: "900", marginTop: 4 }}>{kpi.val}</Text>
+                  <Text style={{ color: COLORS.muted, fontSize: 11 }}>{kpi.label}</Text>
+                </View>
+              ))}
+            </View>
+
+            {myPosts.length > 0 && (
+              <View style={{ backgroundColor: COLORS.surface2, borderRadius: 12, padding: 12, marginBottom: 14, borderWidth: 0.5, borderColor: COLORS.border }}>
+                <Text style={{ color: COLORS.warn, fontSize: 11, fontWeight: "800", textAlign: "right", marginBottom: 4 }}>
+                  🏆 أفضل منشور أداءً
+                </Text>
+                {(() => {
+                  const topPost = [...myPosts].sort((a, b) => b.likes - a.likes)[0];
+                  return (
+                    <View style={{ flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+                      <Text style={{ color: COLORS.text, fontSize: 12.5, flex: 1, textAlign: "right" }} numberOfLines={2}>
+                        {topPost.content || "منشور مصوّر"}
+                      </Text>
+                      <Text style={{ color: COLORS.heart, fontWeight: "800", fontSize: 13 }}>❤️ {topPost.likes}</Text>
+                    </View>
+                  );
+                })()}
+              </View>
+            )}
+
+            <TouchableOpacity
+              style={styles.saveBtn}
+              onPress={() => {
+                setAnalyticsOpen(false);
+                setTimeout(() => setStreakOpen(true), 200);
+              }}
+            >
+              <Text style={{ color: "#fff", fontWeight: "800", fontSize: 13 }}>
+                🔥 افتح المكافآت اليومية ومتجر التوثيق والنقاط
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Daily Login Streak & SHAHINAZ Coin Store */}
+      <DailyStreakModal visible={streakOpen} onClose={() => setStreakOpen(false)} />
 
       {/* Encrypted Developer Vault PIN Keypad */}
       <DevVaultModal
@@ -523,4 +624,20 @@ const styles = StyleSheet.create({
   },
   postModalImg: { width: "100%", height: 320 },
   postModalTextBox: { width: "100%", minHeight: 220, padding: 24, alignItems: "center", justifyContent: "center" },
+  analyticsCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 22,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  kpiBox: {
+    width: "48.5%",
+    backgroundColor: COLORS.surface2,
+    borderRadius: 14,
+    padding: 12,
+    alignItems: "center",
+    borderWidth: 0.5,
+    borderColor: COLORS.border,
+  },
 });

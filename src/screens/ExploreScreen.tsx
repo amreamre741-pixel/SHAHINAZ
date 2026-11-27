@@ -19,11 +19,13 @@ import { LinearGradient } from "expo-linear-gradient";
 import { COLORS } from "../theme";
 import { useApp } from "../store/AppContext";
 import type { AudioRoom } from "../types";
+import ShahinazAiModal from "../components/ShahinazAiModal";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const GRID_SIZE = (SCREEN_WIDTH - 4) / 3;
 
 const TRENDING_TAGS = ["#الجزائر", "#تحدي_الأسبوع", "#SHAHINAZ", "#وهران", "#تجارة"];
+const WILAYA_FILTERS = ["الكل", "الجزائر", "وهران", "سطيف", "قسنطينة", "عنابة"];
 
 const SHOP_REELS = [
   {
@@ -85,6 +87,7 @@ export default function ExploreScreen() {
     posts,
     marketItems,
     audioRooms,
+    codOrders,
     marketEnabled,
     audioRoomsEnabled,
     rolePermissions,
@@ -97,6 +100,9 @@ export default function ExploreScreen() {
 
   const [mode, setMode] = useState<"explore" | "reels" | "rooms" | "market">("explore");
   const [q, setQ] = useState("");
+  const [wilayaFilter, setWilayaFilter] = useState("الكل");
+  const [ordersOpen, setOrdersOpen] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
   const [likedReels, setLikedReels] = useState<string[]>([]);
   const [previewPostId, setPreviewPostId] = useState<string | null>(null);
   const [reelComments, setReelComments] = useState(INITIAL_REEL_COMMENTS);
@@ -145,9 +151,12 @@ export default function ExploreScreen() {
 
   const filteredMarket = useMemo(() => {
     const s = q.trim().toLowerCase();
-    if (!s) return marketItems;
-    return marketItems.filter((m) => m.title.toLowerCase().includes(s) || m.city.toLowerCase().includes(s));
-  }, [marketItems, q]);
+    return marketItems.filter((m) => {
+      const matchWilaya = wilayaFilter === "الكل" || m.city.includes(wilayaFilter);
+      const matchQuery = !s || m.title.toLowerCase().includes(s) || m.city.toLowerCase().includes(s);
+      return matchWilaya && matchQuery;
+    });
+  }, [marketItems, q, wilayaFilter]);
 
   function handleConfirmCod() {
     if (!codProduct) return;
@@ -240,6 +249,37 @@ export default function ExploreScreen() {
               </View>
               <Ionicons name="trophy" size={26} color="#fde68a" />
             </LinearGradient>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => setAiOpen(true)}
+            activeOpacity={0.85}
+            style={{
+              marginHorizontal: 12,
+              marginBottom: 10,
+              backgroundColor: COLORS.surface,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: "rgba(168,85,247,0.35)",
+              paddingHorizontal: 12,
+              paddingVertical: 10,
+              flexDirection: "row-reverse",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 8, flex: 1 }}>
+              <Ionicons name="sparkles" size={19} color="#c084fc" />
+              <View style={{ alignItems: "flex-end", flex: 1 }}>
+                <Text style={{ color: COLORS.text, fontSize: 12.5, fontWeight: "800" }}>
+                  استوديو SHAHINAZ AI للتجار والمبدعين ✨
+                </Text>
+                <Text style={{ color: COLORS.muted, fontSize: 11 }}>
+                  كاتب إعلانات جزائري · أفكار ريلز · هاشتاغات · حاسبة أرباح دج
+                </Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-back" size={18} color="#c084fc" />
           </TouchableOpacity>
 
           <ScrollView
@@ -459,22 +499,68 @@ export default function ExploreScreen() {
             </View>
           ) : (
             <>
-              <TouchableOpacity
-                style={styles.sellBtn}
-                onPress={() => {
-                  const role = currentUser?.role || "USER";
-                  if (!addingProduct && !rolePermissions[role]?.canSellMarket) {
-                    Alert.alert("الصلاحيات", "عرض المنتجات في السوق غير مفعّل لرتبتك الحالية من طرف الإدارة.");
-                    return;
-                  }
-                  setAddingProduct((v) => !v);
-                }}
+              <View style={{ flexDirection: "row-reverse", gap: 8, marginBottom: 10 }}>
+                <TouchableOpacity
+                  style={[styles.sellBtn, { flex: 1, marginBottom: 0 }]}
+                  onPress={() => {
+                    const role = currentUser?.role || "USER";
+                    if (!addingProduct && !rolePermissions[role]?.canSellMarket) {
+                      Alert.alert("الصلاحيات", "عرض المنتجات في السوق غير مفعّل لرتبتك الحالية من طرف الإدارة.");
+                      return;
+                    }
+                    setAddingProduct((v) => !v);
+                  }}
+                >
+                  <Ionicons name={addingProduct ? "close" : "add-circle-outline"} size={18} color="#fff" />
+                  <Text style={{ color: "#fff", fontWeight: "700", fontSize: 12.5 }}>
+                    {addingProduct ? "إغلاق" : "اعرض منتجك للبيع"}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{
+                    flexDirection: "row-reverse",
+                    alignItems: "center",
+                    gap: 5,
+                    backgroundColor: COLORS.surface,
+                    borderWidth: 1,
+                    borderColor: codOrders.length > 0 ? COLORS.success : COLORS.border,
+                    borderRadius: 12,
+                    paddingHorizontal: 12,
+                    justifyContent: "center",
+                  }}
+                  onPress={() => setOrdersOpen(true)}
+                >
+                  <Ionicons name="cube-outline" size={17} color={codOrders.length > 0 ? COLORS.success : COLORS.text} />
+                  <Text style={{ color: COLORS.text, fontWeight: "800", fontSize: 12 }}>
+                    طلباتي ({codOrders.length})
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={{ maxHeight: 38, marginBottom: 10 }}
+                contentContainerStyle={{ gap: 7 }}
               >
-                <Ionicons name={addingProduct ? "close" : "add-circle-outline"} size={18} color="#fff" />
-                <Text style={{ color: "#fff", fontWeight: "700", fontSize: 13 }}>
-                  {addingProduct ? "إغلاق" : "اعرض منتجك للبيع مجاناً"}
-                </Text>
-              </TouchableOpacity>
+                {WILAYA_FILTERS.map((w) => {
+                  const active = wilayaFilter === w;
+                  return (
+                    <TouchableOpacity
+                      key={w}
+                      style={[
+                        styles.tagChip,
+                        active && { borderColor: COLORS.primary, backgroundColor: "rgba(168,85,247,0.22)" },
+                      ]}
+                      onPress={() => setWilayaFilter(w)}
+                    >
+                      <Text style={[styles.tagText, active && { color: "#e9d5ff", fontWeight: "800" }]}>
+                        {w === "الكل" ? "🇩🇿 كل الولايات" : `📍 ${w}`}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
 
               {addingProduct && (
                 <View style={styles.formCard}>
@@ -811,6 +897,99 @@ export default function ExploreScreen() {
           )}
         </View>
       </Modal>
+
+      {/* My 58-Wilaya COD Orders Tracker Modal */}
+      <Modal visible={ordersOpen} transparent animationType="slide" onRequestClose={() => setOrdersOpen(false)}>
+        <View style={styles.lightbox}>
+          <View style={[styles.modalSheet, { maxHeight: "82%" }]}>
+            <View style={{ flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <Text style={[styles.sheetTitle, { marginBottom: 0 }]}>📦 تتبع طلباتي (58 ولاية)</Text>
+              <TouchableOpacity onPress={() => setOrdersOpen(false)}>
+                <Ionicons name="close" size={24} color={COLORS.text} />
+              </TouchableOpacity>
+            </View>
+
+            {codOrders.length === 0 ? (
+              <View style={{ alignItems: "center", paddingVertical: 28, gap: 8 }}>
+                <Ionicons name="cube-outline" size={44} color={COLORS.muted} />
+                <Text style={{ color: COLORS.text, fontWeight: "800", fontSize: 15 }}>لا توجد طلبات حالياً</Text>
+                <Text style={{ color: COLORS.muted, fontSize: 12.5, textAlign: "center", lineHeight: 19 }}>
+                  عند طلب أي منتج من السوق أو ريلز التسوق بنظام الدفع عند الاستلام (COD)، سيظهر هنا مع تتبع التوصيل المباشر.
+                </Text>
+              </View>
+            ) : (
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingBottom: 8 }}>
+                {codOrders.map((ord, idx) => (
+                  <View
+                    key={ord.id}
+                    style={{
+                      backgroundColor: COLORS.surface2,
+                      borderRadius: 14,
+                      padding: 12,
+                      borderWidth: 0.5,
+                      borderColor: COLORS.border,
+                      gap: 8,
+                    }}
+                  >
+                    <View style={{ flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center" }}>
+                      <Text style={{ color: COLORS.text, fontWeight: "800", fontSize: 13.5, flex: 1, textAlign: "right" }}>
+                        {ord.productTitle}
+                      </Text>
+                      <Text style={{ color: COLORS.success, fontWeight: "900", fontSize: 13 }}>
+                        {ord.priceDzd.toLocaleString("fr-DZ")} دج
+                      </Text>
+                    </View>
+                    <Text style={{ color: COLORS.muted, fontSize: 11.5, textAlign: "right" }}>
+                      👤 {ord.buyerName} · 📍 {ord.wilaya} · 📞 {ord.phone}
+                    </Text>
+
+                    {/* Live 3-Step 58-Wilaya COD Delivery Pipeline */}
+                    <View style={{ flexDirection: "row-reverse", alignItems: "center", justifyContent: "space-between", marginTop: 4 }}>
+                      <View style={{ alignItems: "center", flex: 1 }}>
+                        <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: COLORS.success, alignItems: "center", justifyContent: "center" }}>
+                          <Ionicons name="checkmark" size={14} color="#fff" />
+                        </View>
+                        <Text style={{ color: COLORS.success, fontSize: 10, fontWeight: "800", marginTop: 3 }}>تم التأكيد</Text>
+                      </View>
+                      <View style={{ height: 2, flex: 0.6, backgroundColor: COLORS.success }} />
+                      <View style={{ alignItems: "center", flex: 1 }}>
+                        <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: COLORS.primary, alignItems: "center", justifyContent: "center" }}>
+                          <Ionicons name="cube" size={12} color="#fff" />
+                        </View>
+                        <Text style={{ color: "#e9d5ff", fontSize: 10, fontWeight: "800", marginTop: 3 }}>قيد التجهيز</Text>
+                      </View>
+                      <View style={{ height: 2, flex: 0.6, backgroundColor: idx > 0 ? COLORS.warn : COLORS.border }} />
+                      <View style={{ alignItems: "center", flex: 1 }}>
+                        <View
+                          style={{
+                            width: 22,
+                            height: 22,
+                            borderRadius: 11,
+                            backgroundColor: idx > 0 ? COLORS.warn : COLORS.surface,
+                            borderWidth: 1,
+                            borderColor: idx > 0 ? COLORS.warn : COLORS.border,
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <Ionicons name="car-outline" size={13} color={idx > 0 ? "#000" : COLORS.muted} />
+                        </View>
+                        <Text style={{ color: idx > 0 ? COLORS.warn : COLORS.muted, fontSize: 10, fontWeight: "700", marginTop: 3 }}>
+                          التوصيل للولاية
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={{ color: COLORS.muted, fontSize: 10.5, textAlign: "left" }}>🕒 {ord.createdAt} · الدفع عند الاستلام</Text>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* SHAHINAZ AI Studio Modal */}
+      <ShahinazAiModal visible={aiOpen} onClose={() => setAiOpen(false)} />
     </View>
   );
 }

@@ -23,11 +23,19 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { COLORS } from "../theme";
 import { useApp } from "../store/AppContext";
-import type { Post, Story } from "../types";
+import type { Post, ReactionEmoji, Story } from "../types";
 import AdminScreen from "./AdminScreen";
 import DevVaultModal from "../components/DevVaultModal";
+import DailyStreakModal from "../components/DailyStreakModal";
+import ShahinazAiModal from "../components/ShahinazAiModal";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const REACTIONS: ReactionEmoji[] = ["❤️", "🔥", "😂", "😮", "😢"];
+const GIFT_TIERS = [
+  { emoji: "🌹", label: "وردة", cost: 10 },
+  { emoji: "🔥", label: "نار", cost: 25 },
+  { emoji: "👑", label: "تاج ملكي", cost: 100 },
+];
 
 function PostMediaWithDoubleTap({
   imageUri,
@@ -86,6 +94,9 @@ export default function FeedScreen() {
     stories,
     notifications,
     announcement,
+    accentColor,
+    streakDays,
+    claimedStreakToday,
     adminPin,
     bannedWords,
     rolePermissions,
@@ -93,6 +104,8 @@ export default function FeedScreen() {
     blockedUserIds,
     toggleFollowUser,
     toggleLike,
+    setReaction,
+    sendPostGift,
     toggleSave,
     addComment,
     votePoll,
@@ -109,7 +122,10 @@ export default function FeedScreen() {
   } = useApp();
 
   const [refreshing, setRefreshing] = useState(false);
+  const [feedMode, setFeedMode] = useState<"foryou" | "following" | "trending">("foryou");
   const [commentingPostId, setCommentingPostId] = useState<string | null>(null);
+  const [reactionPostId, setReactionPostId] = useState<string | null>(null);
+  const [giftPostId, setGiftPostId] = useState<string | null>(null);
   const [commentText, setCommentText] = useState("");
   const [activeStory, setActiveStory] = useState<Story | null>(null);
   const [newStoryOpen, setNewStoryOpen] = useState(false);
@@ -117,12 +133,25 @@ export default function FeedScreen() {
   const [storyImg, setStoryImg] = useState<string | undefined>(undefined);
   const [notifOpen, setNotifOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [streakOpen, setStreakOpen] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
   const [devVaultOpen, setDevVaultOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
   const [selectedAuthorId, setSelectedAuthorId] = useState<string | null>(null);
   const [storyReactionMsg, setStoryReactionMsg] = useState("");
 
   const selectedAuthor = allUsers.find((u) => u.id === selectedAuthorId) || null;
+
+  const displayedPosts = React.useMemo(() => {
+    if (feedMode === "following") {
+      const f = posts.filter((p) => followingUserIds.includes(p.author.id) || p.author.id === currentUser?.id);
+      return f.length > 0 ? f : posts;
+    }
+    if (feedMode === "trending") {
+      return [...posts].sort((a, b) => b.likes - a.likes);
+    }
+    return posts;
+  }, [posts, feedMode, followingUserIds, currentUser]);
 
   const versionTapCountRef = useRef(0);
   const versionTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -232,10 +261,10 @@ export default function FeedScreen() {
   return (
     <View style={styles.screen}>
       <FlatList
-        data={posts}
+        data={displayedPosts}
         keyExtractor={(item) => item.id}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={accentColor} />}
         ListHeaderComponent={
           <View>
             {/* Ultra-clean Instagram-grade Top Header */}
@@ -249,11 +278,31 @@ export default function FeedScreen() {
               </TouchableOpacity>
               <View style={styles.headerRight}>
                 <TouchableOpacity
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 3,
+                    backgroundColor: "rgba(245,158,11,0.16)",
+                    borderColor: claimedStreakToday ? "rgba(245,158,11,0.35)" : COLORS.warn,
+                    borderWidth: 0.8,
+                    paddingHorizontal: 8,
+                    paddingVertical: 4,
+                    borderRadius: 999,
+                  }}
+                  onPress={() => setStreakOpen(true)}
+                >
+                  <Ionicons name="flame" size={14} color={COLORS.warn} />
+                  <Text style={{ color: COLORS.warn, fontSize: 11.5, fontWeight: "800" }}>{streakDays}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.iconBtn} onPress={() => setAiOpen(true)}>
+                  <Ionicons name="sparkles-outline" size={21} color={accentColor} />
+                </TouchableOpacity>
+                <TouchableOpacity
                   style={styles.iconBtn}
                   onPress={() => setSettingsOpen(true)}
                   accessibilityLabel="الإعدادات"
                 >
-                  <Ionicons name="settings-outline" size={23} color={COLORS.text} />
+                  <Ionicons name="settings-outline" size={22} color={COLORS.text} />
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.iconBtn}
@@ -263,7 +312,7 @@ export default function FeedScreen() {
                   }}
                   accessibilityLabel="الإشعارات"
                 >
-                  <Ionicons name="notifications-outline" size={24} color={COLORS.text} />
+                  <Ionicons name="notifications-outline" size={23} color={COLORS.text} />
                   {unreadNotifs > 0 && <View style={styles.redDot} />}
                 </TouchableOpacity>
               </View>
@@ -328,6 +377,30 @@ export default function FeedScreen() {
                 </TouchableOpacity>
               ))}
             </ScrollView>
+
+            {/* SHAHINAZ Ultra 3.0 Smart Feed Switcher */}
+            <View style={styles.feedTabsBar}>
+              {(
+                [
+                  { id: "foryou", label: "لك ✨" },
+                  { id: "following", label: "المتابَعون 👥" },
+                  { id: "trending", label: "ترند 🔥" },
+                ] as const
+              ).map((tab) => {
+                const active = feedMode === tab.id;
+                return (
+                  <TouchableOpacity
+                    key={tab.id}
+                    style={[styles.feedTabBtn, active && { borderBottomColor: accentColor }]}
+                    onPress={() => setFeedMode(tab.id)}
+                  >
+                    <Text style={[styles.feedTabText, active && { color: COLORS.text, fontWeight: "800" }]}>
+                      {tab.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
           </View>
         }
         renderItem={({ item }) => (
@@ -392,15 +465,27 @@ export default function FeedScreen() {
               </LinearGradient>
             ) : null}
 
-            {/* Clean Instagram Action Bar */}
+            {/* Clean Instagram Action Bar + Long-Press Reactions & Creator Gifts */}
             <View style={styles.actionBar}>
               <View style={styles.actionLeft}>
-                <TouchableOpacity onPress={() => toggleLike(item.id)} style={styles.actionIconBtn}>
-                  <Ionicons
-                    name={item.likedByMe ? "heart" : "heart-outline"}
-                    size={26}
-                    color={item.likedByMe ? COLORS.heart : COLORS.text}
-                  />
+                <TouchableOpacity
+                  onPress={() => toggleLike(item.id)}
+                  onLongPress={() => {
+                    setGiftPostId(null);
+                    setReactionPostId(reactionPostId === item.id ? null : item.id);
+                  }}
+                  delayLongPress={260}
+                  style={styles.actionIconBtn}
+                >
+                  {item.myReaction && item.myReaction !== "❤️" ? (
+                    <Text style={{ fontSize: 22, lineHeight: 26 }}>{item.myReaction}</Text>
+                  ) : (
+                    <Ionicons
+                      name={item.likedByMe ? "heart" : "heart-outline"}
+                      size={26}
+                      color={item.likedByMe ? COLORS.heart : COLORS.text}
+                    />
+                  )}
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => setCommentingPostId(commentingPostId === item.id ? null : item.id)}
@@ -414,16 +499,80 @@ export default function FeedScreen() {
                 >
                   <Ionicons name="paper-plane-outline" size={23} color={COLORS.text} />
                 </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => {
+                    setReactionPostId(null);
+                    setGiftPostId(giftPostId === item.id ? null : item.id);
+                  }}
+                  style={styles.actionIconBtn}
+                >
+                  <Ionicons
+                    name="gift-outline"
+                    size={22}
+                    color={giftPostId === item.id ? COLORS.warn : COLORS.text}
+                  />
+                </TouchableOpacity>
               </View>
 
               <TouchableOpacity onPress={() => toggleSave(item.id)} style={styles.actionIconBtn}>
                 <Ionicons
                   name={item.savedByMe ? "bookmark" : "bookmark-outline"}
                   size={24}
-                  color={item.savedByMe ? COLORS.text : COLORS.text}
+                  color={item.savedByMe ? accentColor : COLORS.text}
                 />
               </TouchableOpacity>
             </View>
+
+            {/* Floating 5-Emoji Multi-Reaction Picker */}
+            {reactionPostId === item.id && (
+              <View style={styles.reactionPill}>
+                {REACTIONS.map((em) => (
+                  <TouchableOpacity
+                    key={em}
+                    style={[styles.reactionItem, item.myReaction === em && { backgroundColor: "rgba(168,85,247,0.28)" }]}
+                    onPress={() => {
+                      setReaction(item.id, em);
+                      setReactionPostId(null);
+                    }}
+                  >
+                    <Text style={{ fontSize: 22 }}>{em}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+
+            {/* Quick Creator Gift Strip */}
+            {giftPostId === item.id && (
+              <View style={styles.giftStrip}>
+                <Text style={{ color: COLORS.warn, fontSize: 11.5, fontWeight: "800", textAlign: "right", marginBottom: 6 }}>
+                  🎁 ادعم {item.author.name} بهدية فورية (رصيدك: {currentUser?.points ?? 150} 🪙)
+                </Text>
+                <View style={{ flexDirection: "row-reverse", gap: 8 }}>
+                  {GIFT_TIERS.map((g) => (
+                    <TouchableOpacity
+                      key={g.emoji}
+                      style={styles.giftBtn}
+                      onPress={() => {
+                        const res = sendPostGift(item.id, g.emoji, g.cost);
+                        setGiftPostId(null);
+                        if (!res.ok) {
+                          Alert.alert("رصيد النقاط غير كافٍ", res.message, [
+                            { text: "إغلاق", style: "cancel" },
+                            { text: "اجمع نقاط مجانية 🔥", onPress: () => setStreakOpen(true) },
+                          ]);
+                        } else {
+                          Alert.alert("تم الإرسال 🎉", res.message);
+                        }
+                      }}
+                    >
+                      <Text style={{ fontSize: 20 }}>{g.emoji}</Text>
+                      <Text style={{ color: COLORS.text, fontSize: 11, fontWeight: "700" }}>{g.label}</Text>
+                      <Text style={{ color: COLORS.warn, fontSize: 10.5, fontWeight: "800" }}>{g.cost} 🪙</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            )}
 
             {/* Likes & Caption */}
             <View style={styles.captionWrap}>
@@ -831,12 +980,18 @@ export default function FeedScreen() {
 
               {/* Stealth 5-Tap Developer Entry Footer (100% invisible to normal users) */}
               <TouchableOpacity activeOpacity={0.7} onPress={handleSecretVersionTap} style={styles.versionFooter}>
-                <Text style={styles.versionText}>SHAHINAZ Ultra · v1.0.0</Text>
+                <Text style={styles.versionText}>SHAHINAZ Ultra 3.0 · OTA Live</Text>
               </TouchableOpacity>
             </ScrollView>
           </View>
         </View>
       </Modal>
+
+      {/* Daily Login Streak, Coin Store & Accent Theme Picker */}
+      <DailyStreakModal visible={streakOpen} onClose={() => setStreakOpen(false)} />
+
+      {/* SHAHINAZ AI Studio (Copywriter, Viral Reels, Hashtags, DZD Profit Calculator) */}
+      <ShahinazAiModal visible={aiOpen} onClose={() => setAiOpen(false)} />
 
       {/* Encrypted Developer Vault PIN Keypad */}
       <DevVaultModal
@@ -1181,5 +1336,60 @@ const styles = StyleSheet.create({
     color: COLORS.muted,
     fontSize: 11.5,
     letterSpacing: 0.4,
+  },
+  feedTabsBar: {
+    flexDirection: "row-reverse",
+    borderBottomWidth: 0.5,
+    borderBottomColor: COLORS.border,
+    backgroundColor: COLORS.bg,
+  },
+  feedTabBtn: {
+    flex: 1,
+    paddingVertical: 11,
+    alignItems: "center",
+    borderBottomWidth: 2,
+    borderBottomColor: "transparent",
+  },
+  feedTabText: { color: COLORS.muted, fontSize: 13, fontWeight: "600" },
+  reactionPill: {
+    flexDirection: "row-reverse",
+    alignSelf: "flex-end",
+    marginHorizontal: 14,
+    marginTop: 4,
+    marginBottom: 4,
+    backgroundColor: COLORS.surface,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  reactionItem: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  giftStrip: {
+    marginHorizontal: 14,
+    marginTop: 6,
+    marginBottom: 6,
+    backgroundColor: COLORS.surface,
+    borderRadius: 14,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: "rgba(245,158,11,0.35)",
+  },
+  giftBtn: {
+    flex: 1,
+    backgroundColor: COLORS.surface2,
+    borderRadius: 11,
+    paddingVertical: 8,
+    alignItems: "center",
+    gap: 2,
+    borderWidth: 0.5,
+    borderColor: COLORS.border,
   },
 });
