@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import { Alert, FlatList, Image, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import * as ImagePicker from "expo-image-picker";
+import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { COLORS } from "../theme";
 import { useApp } from "../store/AppContext";
 import type { Post, Story } from "../types";
@@ -79,7 +81,7 @@ export default function FeedScreen() {
                   markAllNotificationsRead();
                 }}
               >
-                <Text style={{ fontSize: 18 }}>🔔</Text>
+                <Ionicons name="notifications-outline" size={24} color={COLORS.text} />
                 {unreadNotifs > 0 && (
                   <View style={styles.bellBadge}>
                     <Text style={{ color: "#fff", fontSize: 10, fontWeight: "700" }}>{unreadNotifs}</Text>
@@ -96,9 +98,11 @@ export default function FeedScreen() {
 
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.storiesRow}>
               <TouchableOpacity style={styles.storyItem} onPress={() => setNewStoryOpen(true)}>
-                <View style={[styles.storyRing, { borderColor: COLORS.primary }]}>
-                  <Text style={styles.storyEmoji}>➕</Text>
-                </View>
+                <LinearGradient colors={["#8b5cf6", "#ec4899"]} style={{ padding: 2.5, borderRadius: 33 }}>
+                  <View style={[styles.storyRing, { borderWidth: 0 }]}>
+                    <Ionicons name="add" size={28} color={COLORS.primary} />
+                  </View>
+                </LinearGradient>
                 <Text style={styles.storyName}>قصتك</Text>
               </TouchableOpacity>
 
@@ -111,9 +115,16 @@ export default function FeedScreen() {
                     setActiveStory(st);
                   }}
                 >
-                  <View style={[styles.storyRing, !st.seen && styles.storyRingActive]}>
-                    <Text style={styles.storyEmoji}>{st.avatarEmoji}</Text>
-                  </View>
+                  <LinearGradient
+                    colors={!st.seen ? ["#f59e0b", "#ec4899", "#8b5cf6"] : ["#334155", "#1e293b"]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={{ padding: 2.5, borderRadius: 33 }}
+                  >
+                    <View style={[styles.storyRing, { borderWidth: 2, borderColor: COLORS.bg }]}>
+                      <Text style={styles.storyEmoji}>{st.avatarEmoji}</Text>
+                    </View>
+                  </LinearGradient>
                   <Text style={styles.storyName} numberOfLines={1}>
                     {st.userName}
                   </Text>
@@ -134,16 +145,17 @@ export default function FeedScreen() {
                   )}
                 </View>
                 <View style={{ alignItems: "flex-end" }}>
-                  <Text style={styles.authorName}>
-                    {item.author.name} {item.author.verified ? "☑️" : ""}
-                  </Text>
+                  <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 4 }}>
+                    <Text style={styles.authorName}>{item.author.name}</Text>
+                    {item.author.verified && <Ionicons name="checkmark-circle" size={15} color="#38bdf8" />}
+                  </View>
                   <Text style={styles.meta}>
                     {item.createdAt} {item.location ? `· ${item.location}` : ""}
                   </Text>
                 </View>
               </View>
               <TouchableOpacity onPress={() => openPostMenu(item)} style={styles.moreBtn}>
-                <Text style={styles.moreText}>⋯</Text>
+                <Ionicons name="ellipsis-horizontal" size={20} color={COLORS.muted} />
               </TouchableOpacity>
             </View>
 
@@ -196,18 +208,21 @@ export default function FeedScreen() {
 
             <View style={styles.actionsRow}>
               <TouchableOpacity style={styles.actionBtn} onPress={() => toggleLike(item.id)}>
-                <Text style={styles.actionText}>
-                  {item.likedByMe ? "❤️" : "🤍"} {item.likes}
-                </Text>
+                <Ionicons name={item.likedByMe ? "heart" : "heart-outline"} size={21} color={item.likedByMe ? "#f43f5e" : COLORS.muted} />
+                <Text style={[styles.actionText, item.likedByMe && { color: "#f43f5e" }]}>{item.likes}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.actionBtn}
                 onPress={() => setCommentingPostId(commentingPostId === item.id ? null : item.id)}
               >
-                <Text style={styles.actionText}>💬 {item.comments.length}</Text>
+                <Ionicons name="chatbubble-outline" size={20} color={COLORS.muted} />
+                <Text style={styles.actionText}>{item.comments.length}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.actionBtn} onPress={() => toggleSave(item.id)}>
-                <Text style={styles.actionText}>{item.savedByMe ? "🔖 محفوظ" : "📑 حفظ"}</Text>
+                <Ionicons name={item.savedByMe ? "bookmark" : "bookmark-outline"} size={20} color={item.savedByMe ? COLORS.primary : COLORS.muted} />
+                <Text style={[styles.actionText, item.savedByMe && { color: COLORS.primary }]}>
+                  {item.savedByMe ? "محفوظ" : "حفظ"}
+                </Text>
               </TouchableOpacity>
             </View>
 
@@ -399,7 +414,7 @@ const styles = StyleSheet.create({
     borderTopColor: COLORS.border,
     paddingTop: 10,
   },
-  actionBtn: { paddingVertical: 4, paddingHorizontal: 10 },
+  actionBtn: { flexDirection: "row-reverse", alignItems: "center", gap: 6, paddingVertical: 4, paddingHorizontal: 10 },
   actionText: { color: COLORS.text, fontSize: 13, fontWeight: "600" },
   commentsBox: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: COLORS.border, gap: 8 },
   commentItem: { backgroundColor: COLORS.surface2, borderRadius: 10, padding: 8, alignItems: "flex-end" },
