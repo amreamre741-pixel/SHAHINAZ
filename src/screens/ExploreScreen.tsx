@@ -547,7 +547,7 @@ export default function ExploreScreen() {
                     <View style={{ flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center" }}>
                       <View style={styles.liveBadge}>
                         <View style={[styles.liveDot, { backgroundColor: theme.danger }]} />
-                        <Text style={{ color: "#fff", fontSize: 10.5, fontWeight: "900" }}>مباشر · {item.listeners} مستمع</Text>
+                        <Text style={{ color: theme.danger, fontSize: 10.5, fontWeight: "900" }}>مباشر · {item.listeners} مستمع</Text>
                       </View>
                       <View style={{ backgroundColor: theme.primarySoft, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 }}>
                         <Text style={{ color: theme.primary, fontSize: 11, fontWeight: "800" }}>{item.topic}</Text>
@@ -773,7 +773,7 @@ export default function ExploreScreen() {
               <View style={{ flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                 <View style={styles.liveBadge}>
                   <View style={[styles.liveDot, { backgroundColor: theme.danger }]} />
-                  <Text style={{ color: "#fff", fontSize: 10, fontWeight: "900" }}>مباشر · {activeRoom.listeners + 1} متواجد</Text>
+                  <Text style={{ color: theme.danger, fontSize: 10.5, fontWeight: "900" }}>مباشر · {activeRoom.listeners + 1} متواجد</Text>
                 </View>
                 <TouchableOpacity onPress={() => setActiveRoom(null)}>
                   <Text style={{ color: theme.danger, fontWeight: "800", fontSize: 13 }}>مغادرة الغرفة ✕</Text>
@@ -820,7 +820,7 @@ export default function ExploreScreen() {
                           micOn && { borderColor: theme.success, borderWidth: 3 },
                         ]}
                       >
-                        <Ionicons name="person" size={28} color="#fff" />
+                        <Ionicons name="person" size={28} color={theme.text} />
                       </View>
                     )}
                     <Text style={{ color: theme.text, fontSize: 12, fontWeight: "800", marginTop: 6 }} numberOfLines={1}>
@@ -838,14 +838,16 @@ export default function ExploreScreen() {
                   style={[styles.sellBtn, { flex: 1, marginBottom: 0, backgroundColor: micOn ? theme.success : theme.surface2 }]}
                   onPress={() => setMicOn((v) => !v)}
                 >
-                  <Ionicons name={micOn ? "mic" : "mic-off"} size={18} color="#fff" />
-                  <Text style={{ color: "#fff", fontWeight: "800" }}>{micOn ? "الميكروفون مفتوح" : "كتم الصوت"}</Text>
+                  <Ionicons name={micOn ? "mic" : "mic-off"} size={18} color={micOn ? "#fff" : theme.text} />
+                  <Text style={{ color: micOn ? "#fff" : theme.text, fontWeight: "800" }}>
+                    {micOn ? "الميكروفون مفتوح" : "كتم الصوت"}
+                  </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.sellBtn, { flex: 1, marginBottom: 0, backgroundColor: handRaised ? theme.primary : theme.surface2 }]}
                   onPress={() => setHandRaised((v) => !v)}
                 >
-                  <Text style={{ color: handRaised ? theme.btnText : "#fff", fontWeight: "800" }}>
+                  <Text style={{ color: handRaised ? theme.btnText : theme.text, fontWeight: "800" }}>
                     {handRaised ? "✋ يدك مرفوعة" : "✋ اطلب الكلمة"}
                   </Text>
                 </TouchableOpacity>

@@ -220,9 +220,9 @@ export default function MessagesScreen() {
         </ScrollView>
 
         {recording && (
-          <View style={[styles.recBar, { backgroundColor: "rgba(239,68,68,0.18)", borderColor: theme.danger }]}>
+          <View style={[styles.recBar, { backgroundColor: "rgba(239,68,68,0.16)", borderColor: theme.danger }]}>
             <View style={[styles.recDot, { backgroundColor: theme.danger }]} />
-            <Text style={{ color: "#fff", fontSize: 12, fontWeight: "800" }}>
+            <Text style={{ color: theme.danger, fontSize: 12, fontWeight: "800" }}>
               جاري التسجيل · 0:{String(recSeconds).padStart(2, "0")} — اضغط إيقاف للإرسال
             </Text>
           </View>

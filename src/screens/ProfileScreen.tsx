@@ -149,7 +149,15 @@ export default function ProfileScreen() {
           }}
         />
         <View style={styles.coverTopRow}>
-          <View style={[styles.handlePill, { backgroundColor: "rgba(0,0,0,0.45)", borderColor: theme.borderGlow }]}>
+          <View
+            style={[
+              styles.handlePill,
+              {
+                backgroundColor: theme.isLight ? "rgba(255,255,255,0.84)" : "rgba(0,0,0,0.45)",
+                borderColor: theme.borderGlow,
+              },
+            ]}
+          >
             <Text style={{ color: theme.text, fontWeight: "800", fontSize: 13 }}>@{currentUser.username}</Text>
             {currentUser.verified && <Ionicons name="checkmark-circle" size={14} color={theme.verified} />}
             {currentUser.isPrivate && <Ionicons name="lock-closed" size={12} color={theme.primary} />}
@@ -157,13 +165,25 @@ export default function ProfileScreen() {
 
           <View style={{ flexDirection: "row", gap: 8 }}>
             <TouchableOpacity
-              style={[styles.coverIconBtn, { backgroundColor: "rgba(0,0,0,0.45)", borderColor: theme.borderGlow }]}
+              style={[
+                styles.coverIconBtn,
+                {
+                  backgroundColor: theme.isLight ? "rgba(255,255,255,0.84)" : "rgba(0,0,0,0.45)",
+                  borderColor: theme.borderGlow,
+                },
+              ]}
               onPress={() => setThemeOpen(true)}
             >
               <Ionicons name="color-palette-outline" size={19} color={theme.primary} />
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.coverIconBtn, { backgroundColor: "rgba(0,0,0,0.45)", borderColor: theme.border }]}
+              style={[
+                styles.coverIconBtn,
+                {
+                  backgroundColor: theme.isLight ? "rgba(255,255,255,0.84)" : "rgba(0,0,0,0.45)",
+                  borderColor: theme.border,
+                },
+              ]}
               onPress={() => setSubTab(subTab === "settings" ? "posts" : "settings")}
             >
               <Ionicons name="settings-outline" size={19} color={theme.text} />

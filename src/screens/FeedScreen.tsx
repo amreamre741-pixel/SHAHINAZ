@@ -493,8 +493,8 @@ export default function FeedScreen() {
                 style={[styles.quickHubPill, { backgroundColor: "rgba(239,68,68,0.14)", borderColor: "rgba(239,68,68,0.45)" }]}
                 onPress={() => setLiveOpen(true)}
               >
-                <PulseDot color="#EF4444" size={7} />
-                <Text style={{ color: "#FCA5A5", fontSize: 11.5, fontWeight: "900" }}>بث مباشر</Text>
+                <PulseDot color={theme.danger} size={7} />
+                <Text style={{ color: theme.danger, fontSize: 11.5, fontWeight: "900" }}>بث مباشر</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
