@@ -1,13 +1,31 @@
-import React from "react";
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import React, { useState } from "react";
+import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { COLORS } from "../theme";
 import { useApp } from "../store/AppContext";
+import AdminScreen from "./AdminScreen";
+
+const ADMIN_PIN = "1994";
 
 export default function ProfileScreen() {
   const { currentUser, posts, blockedUserIds, logout, deleteAccount } = useApp();
+  const [showAdmin, setShowAdmin] = useState(false);
+  const [pinPrompt, setPinPrompt] = useState(false);
+  const [pinInput, setPinInput] = useState("");
+
   if (!currentUser) return null;
+  if (showAdmin) return <AdminScreen onClose={() => setShowAdmin(false)} />;
 
   const myPosts = posts.filter((p) => p.author.id === currentUser.id);
+
+  function handleCheckPin() {
+    if (pinInput.trim() === ADMIN_PIN) {
+      setPinPrompt(false);
+      setPinInput("");
+      setShowAdmin(true);
+    } else {
+      Alert.alert("رمز خاطئ", "رمز المطور غير صحيح.");
+    }
+  }
 
   function confirmDeleteAccount() {
     Alert.alert(
@@ -33,7 +51,9 @@ export default function ProfileScreen() {
         <View style={styles.avatar}>
           <Text style={{ fontSize: 36 }}>{currentUser.avatarEmoji}</Text>
         </View>
-        <Text style={styles.name}>{currentUser.name}</Text>
+        <Text style={styles.name}>
+          {currentUser.name} {currentUser.verified ? "☑️" : ""}
+        </Text>
         <Text style={styles.username}>@{currentUser.username}</Text>
         <Text style={styles.bio}>{currentUser.bio}</Text>
 
@@ -58,6 +78,28 @@ export default function ProfileScreen() {
         <View style={styles.settingRow}>
           <Text style={styles.settingText}>🚫 المستخدمون المحظورون: {blockedUserIds.length}</Text>
         </View>
+
+        <TouchableOpacity style={styles.adminBtn} onPress={() => setPinPrompt((v) => !v)}>
+          <Text style={styles.adminBtnText}>🛡️ لوحة تحكم المطور (Admin)</Text>
+        </TouchableOpacity>
+
+        {pinPrompt && (
+          <View style={styles.pinBox}>
+            <TextInput
+              style={styles.pinInput}
+              placeholder="أدخل رمز المطور السري"
+              placeholderTextColor={COLORS.muted}
+              secureTextEntry
+              keyboardType="number-pad"
+              value={pinInput}
+              onChangeText={setPinInput}
+            />
+            <TouchableOpacity style={styles.pinGoBtn} onPress={handleCheckPin}>
+              <Text style={{ color: "#fff", fontWeight: "700" }}>دخول</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         <TouchableOpacity style={styles.outlineBtn} onPress={logout}>
           <Text style={styles.outlineBtnText}>تسجيل الخروج</Text>
         </TouchableOpacity>
@@ -107,6 +149,33 @@ const styles = StyleSheet.create({
   sectionTitle: { color: COLORS.text, fontSize: 15, fontWeight: "700", textAlign: "right" },
   settingRow: { paddingVertical: 6, alignItems: "flex-end" },
   settingText: { color: COLORS.muted, fontSize: 13 },
+  adminBtn: {
+    backgroundColor: "rgba(139, 92, 246, 0.16)",
+    borderRadius: 12,
+    padding: 12,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+  },
+  adminBtnText: { color: COLORS.primary, fontWeight: "700" },
+  pinBox: { flexDirection: "row-reverse", gap: 8 },
+  pinInput: {
+    flex: 1,
+    backgroundColor: COLORS.surface2,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    color: COLORS.text,
+    textAlign: "right",
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  pinGoBtn: {
+    backgroundColor: COLORS.primary,
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    justifyContent: "center",
+  },
   outlineBtn: {
     backgroundColor: COLORS.surface2,
     borderRadius: 12,

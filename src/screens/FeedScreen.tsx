@@ -5,7 +5,7 @@ import { useApp } from "../store/AppContext";
 import type { Post } from "../types";
 
 export default function FeedScreen() {
-  const { posts, stories, toggleLike, toggleSave, addComment, reportPost, blockUser } = useApp();
+  const { posts, stories, announcement, toggleLike, toggleSave, addComment, reportPost, blockUser } = useApp();
   const [commentingPostId, setCommentingPostId] = useState<string | null>(null);
   const [commentText, setCommentText] = useState("");
 
@@ -42,6 +42,11 @@ export default function FeedScreen() {
             <Text style={styles.brand}>SHAHINAZ</Text>
             <Text style={styles.badge}>✨ جديد</Text>
           </View>
+          {!!announcement && (
+            <View style={{ backgroundColor: "rgba(139,92,246,0.18)", borderColor: COLORS.primary, borderWidth: 1, marginHorizontal: 12, marginBottom: 8, padding: 10, borderRadius: 12 }}>
+              <Text style={{ color: COLORS.text, fontSize: 13, fontWeight: "700", textAlign: "right" }}>📢 {announcement}</Text>
+            </View>
+          )}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.storiesRow}>
             {stories.map((st) => (
               <View key={st.id} style={styles.storyItem}>

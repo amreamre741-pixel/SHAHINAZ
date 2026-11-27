@@ -1,13 +1,26 @@
 import React, { createContext, useContext, useState } from "react";
 import type { ChatThread, Post, Story, User } from "../types";
 
+export interface ReportItem {
+  id: string;
+  postId: string;
+  reason: string;
+  createdAt: string;
+}
+
 interface AppContextValue {
   currentUser: User | null;
   posts: Post[];
+  allPosts: Post[];
+  allUsers: User[];
   stories: Story[];
   chats: ChatThread[];
   blockedUserIds: string[];
   reportedPostIds: string[];
+  reports: ReportItem[];
+  announcement: string;
+  maintenanceMode: boolean;
+  allowRegistration: boolean;
   login: (name: string, username: string) => void;
   logout: () => void;
   deleteAccount: () => void;
@@ -19,12 +32,18 @@ interface AppContextValue {
   blockUser: (userId: string) => void;
   unblockUser: (userId: string) => void;
   sendMessage: (chatId: string, text: string) => void;
+  adminDeletePost: (postId: string) => void;
+  adminDismissReport: (reportId: string) => void;
+  adminToggleVerify: (userId: string) => void;
+  adminSetAnnouncement: (text: string) => void;
+  adminToggleMaintenance: () => void;
+  adminToggleRegistration: () => void;
 }
 
 const DEMO_USERS: User[] = [
   { id: "u_1", name: "ياسين بن علي", username: "yassine_dz", bio: "مصمم ومصور من الجزائر العاصمة 📸", avatarEmoji: "🧔🏻", verified: true, followers: 1420, following: 210 },
   { id: "u_2", name: "سارة منصوري", username: "sara_style", bio: "يوميات، سفر، وأفكار إبداعية ✨", avatarEmoji: "👩🏻‍🎨", verified: true, followers: 3850, following: 185 },
-  { id: "u_3", name: "كريم تكنولوجي", username: "karim_tech", bio: "تقنية وتجارة إلكترونية في الجزائر 🚀", avatarEmoji: "👨🏻‍💻", followers: 960, following: 320 },
+  { id: "u_3", name: "كريم تكنولوجي", username: "karim_tech", bio: "تقنية وتجارة إلكترونية في الجزائر 🚀", avatarEmoji: "👨🏻‍💻", verified: false, followers: 960, following: 320 },
 ];
 
 const INITIAL_STORIES: Story[] = [
@@ -68,9 +87,7 @@ const INITIAL_CHATS: ChatThread[] = [
     lastMessage: "مرحباً بك في SHAHINAZ! كيف حالك؟",
     time: "14:20",
     unread: 1,
-    messages: [
-      { id: "m_1", fromMe: false, text: "مرحباً بك في SHAHINAZ! كيف حالك؟", time: "14:20" },
-    ],
+    messages: [{ id: "m_1", fromMe: false, text: "مرحباً بك في SHAHINAZ! كيف حالك؟", time: "14:20" }],
   },
   {
     id: "ch_2",
@@ -78,9 +95,7 @@ const INITIAL_CHATS: ChatThread[] = [
     lastMessage: "التطبيق سريع جداً ما شاء الله 🚀",
     time: "أمس",
     unread: 0,
-    messages: [
-      { id: "m_2", fromMe: false, text: "التطبيق سريع جداً ما شاء الله 🚀", time: "أمس" },
-    ],
+    messages: [{ id: "m_2", fromMe: false, text: "التطبيق سريع جداً ما شاء الله 🚀", time: "أمس" }],
   },
 ];
 
@@ -88,11 +103,16 @@ const AppContext = createContext<AppContextValue | null>(null);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [users, setUsers] = useState<User[]>(DEMO_USERS);
   const [posts, setPosts] = useState<Post[]>(INITIAL_POSTS);
   const [stories] = useState<Story[]>(INITIAL_STORIES);
   const [chats, setChats] = useState<ChatThread[]>(INITIAL_CHATS);
   const [blockedUserIds, setBlockedUserIds] = useState<string[]>([]);
   const [reportedPostIds, setReportedPostIds] = useState<string[]>([]);
+  const [reports, setReports] = useState<ReportItem[]>([]);
+  const [announcement, setAnnouncement] = useState<string>("");
+  const [maintenanceMode, setMaintenanceMode] = useState<boolean>(false);
+  const [allowRegistration, setAllowRegistration] = useState<boolean>(true);
 
   function login(name: string, username: string) {
     setCurrentUser({
@@ -101,6 +121,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       username: username.trim().replace(/^@/, "") || "shahinaz_user",
       bio: "عضو جديد في مجتمع SHAHINAZ ✨",
       avatarEmoji: "🌟",
+      verified: true,
       followers: 12,
       following: 24,
     });
@@ -115,6 +136,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setPosts(INITIAL_POSTS);
     setBlockedUserIds([]);
     setReportedPostIds([]);
+    setReports([]);
   }
 
   function toggleLike(postId: string) {
@@ -171,8 +193,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setPosts((prev) => [newPost, ...prev]);
   }
 
-  function reportPost(postId: string, _reason: string) {
+  function reportPost(postId: string, reason: string) {
     setReportedPostIds((prev) => (prev.includes(postId) ? prev : [...prev, postId]));
+    setReports((prev) => [{ id: `rep_${Date.now()}`, postId, reason, createdAt: "الآن" }, ...prev]);
   }
 
   function blockUser(userId: string) {
@@ -200,15 +223,57 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     );
   }
 
+  // Admin actions
+  function adminDeletePost(postId: string) {
+    setPosts((prev) => prev.filter((p) => p.id !== postId));
+    setReports((prev) => prev.filter((r) => r.postId !== postId));
+    setReportedPostIds((prev) => prev.filter((id) => id !== postId));
+  }
+
+  function adminDismissReport(reportId: string) {
+    const rep = reports.find((r) => r.id === reportId);
+    setReports((prev) => prev.filter((r) => r.id !== reportId));
+    if (rep) {
+      setReportedPostIds((prev) => prev.filter((id) => id !== rep.postId));
+    }
+  }
+
+  function adminToggleVerify(userId: string) {
+    setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, verified: !u.verified } : u)));
+    setPosts((prev) =>
+      prev.map((p) =>
+        p.author.id === userId ? { ...p, author: { ...p.author, verified: !p.author.verified } } : p
+      )
+    );
+  }
+
+  function adminSetAnnouncement(text: string) {
+    setAnnouncement(text.trim());
+  }
+
+  function adminToggleMaintenance() {
+    setMaintenanceMode((v) => !v);
+  }
+
+  function adminToggleRegistration() {
+    setAllowRegistration((v) => !v);
+  }
+
   return (
     <AppContext.Provider
       value={{
         currentUser,
         posts: posts.filter((p) => !blockedUserIds.includes(p.author.id) && !reportedPostIds.includes(p.id)),
+        allPosts: posts,
+        allUsers: users,
         stories,
         chats: chats.filter((c) => !blockedUserIds.includes(c.user.id)),
         blockedUserIds,
         reportedPostIds,
+        reports,
+        announcement,
+        maintenanceMode,
+        allowRegistration,
         login,
         logout,
         deleteAccount,
@@ -220,6 +285,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         blockUser,
         unblockUser,
         sendMessage,
+        adminDeletePost,
+        adminDismissReport,
+        adminToggleVerify,
+        adminSetAnnouncement,
+        adminToggleMaintenance,
+        adminToggleRegistration,
       }}
     >
       {children}
